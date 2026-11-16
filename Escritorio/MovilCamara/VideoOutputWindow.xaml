@@ -1,0 +1,64 @@
+<Window x:Class="MovilCamara.VideoOutputWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Width="960" Height="584" MinWidth="400" MinHeight="220" Background="Black"
+ WindowStyle="None" ResizeMode="CanResize" WindowStartupLocation="CenterScreen"
+ MouseLeftButtonDown="DragWindow" KeyDown="OnKeyDown">
+ <Window.Resources>
+  <Style TargetType="Button">
+   <Setter Property="Padding" Value="12,7"/><Setter Property="Margin" Value="4,0"/>
+   <Setter Property="Foreground" Value="White"/><Setter Property="Background" Value="#243954"/>
+   <Setter Property="BorderThickness" Value="0"/><Setter Property="Cursor" Value="Hand"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+    <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+     <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Border>
+    <ControlTemplate.Triggers>
+     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Opacity" Value=".75"/></Trigger>
+     <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="#83C8FF"/><Setter TargetName="Surface" Property="BorderThickness" Value="1"/></Trigger>
+    </ControlTemplate.Triggers>
+   </ControlTemplate></Setter.Value></Setter>
+  </Style>
+ </Window.Resources>
+ <Grid x:Name="Root" Background="Black">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+  <Grid.ContextMenu>
+   <ContextMenu>
+    <MenuItem Header="Mostrar / ocultar controles" Click="ToggleClean"/>
+    <MenuItem Header="Girar 90°" Click="RotateView"/>
+    <MenuItem Header="Restablecer giro" Click="ResetRotation"/>
+    <Separator/><MenuItem Header="Cerrar vista" Click="CloseView"/>
+   </ContextMenu>
+  </Grid.ContextMenu>
+  <Border x:Name="Toolbar" Background="#101B2D" Padding="12,6">
+   <DockPanel>
+    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+     <Button Content="Girar 90°" Click="RotateView" ToolTip="Corrección manual de orientación para esta cámara"/>
+     <Button Content="Modo OBS" Click="ToggleClean" ToolTip="Oculta esta barra para capturar sólo la imagen. Esc cierra la ventana."/>
+     <Button x:Name="CloseButton" Content="✕  Cerrar" Click="CloseView" Background="#A63142" ToolTip="Cierra esta vista. Para detener el envío, pulsa Detener en Android."/>
+    </StackPanel>
+    <TextBlock Text="{Binding Name}" Foreground="White" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0"/>
+   </DockPanel>
+  </Border>
+  <Grid Grid.Row="1">
+   <TextBlock Text="{Binding WaitingMessage}" Foreground="#B8C6D8" HorizontalAlignment="Center" VerticalAlignment="Center"
+       TextWrapping="Wrap" TextAlignment="Center" MaxWidth="600" Margin="24">
+    <TextBlock.Style><Style TargetType="TextBlock">
+     <Setter Property="Visibility" Value="Visible"/>
+     <Style.Triggers><DataTrigger Binding="{Binding HasFrame}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers>
+    </Style></TextBlock.Style>
+   </TextBlock>
+   <Image Source="{Binding Source}" Stretch="Uniform"/>
+   <Button x:Name="CleanCloseButton" Content="✕  Cerrar vista" Click="CloseView" Background="#A63142"
+       HorizontalAlignment="Right" VerticalAlignment="Top" Margin="10" ToolTip="Esc también cierra. Clic derecho muestra los controles.">
+    <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+     <Setter Property="Visibility" Value="Collapsed"/>
+     <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions>
+      <Condition Binding="{Binding ElementName=Toolbar, Path=Visibility}" Value="Collapsed"/>
+      <Condition Binding="{Binding ElementName=Root, Path=IsMouseOver}" Value="True"/>
+     </MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers>
+    </Style></Button.Style>
+   </Button>
+  </Grid>
+ </Grid>
+</Window>

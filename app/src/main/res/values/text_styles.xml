@@ -1,0 +1,13 @@
+<resources>
+    <style name="TextAppearance.WT" parent="TextAppearance.MaterialComponents.Body1" />
+    <style name="TextAppearance.WT.Body" parent="TextAppearance.MaterialComponents.Body1">
+        <item name="android:textColor">@color/brand_muted</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:lineSpacingExtra">3dp</item>
+    </style>
+    <style name="TextAppearance.WT.Title" parent="TextAppearance.MaterialComponents.Headline5">
+        <item name="android:textColor">@color/brand_text</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">24sp</item>
+    </style>
+</resources>

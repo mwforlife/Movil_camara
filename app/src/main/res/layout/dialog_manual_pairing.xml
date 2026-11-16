@@ -1,0 +1,11 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:padding="24dp">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="@string/manual_pairing_help" />
+    <EditText android:id="@+id/pairing_code_input" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginTop="12dp"
+        android:hint="@string/manual_pairing" android:inputType="textMultiLine|textNoSuggestions"
+        android:maxLength="4096" android:minLines="3" android:maxLines="6"
+        android:importantForAutofill="no" />
+</LinearLayout>

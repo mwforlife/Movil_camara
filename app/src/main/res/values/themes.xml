@@ -1,0 +1,13 @@
+<resources>
+    <style name="Theme.MovilCamara" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/brand_primary</item>
+        <item name="colorPrimaryVariant">@color/brand_surface</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">@color/brand_accent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/brand_background</item>
+        <item name="android:navigationBarColor">@color/brand_background</item>
+        <item name="android:windowBackground">@color/brand_background</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+</resources>

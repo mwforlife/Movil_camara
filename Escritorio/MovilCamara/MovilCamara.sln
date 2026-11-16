@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36202.13 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MovilCamara", "MovilCamara.csproj", "{94709E2D-1689-43C9-AB48-81BF2439C68F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{94709E2D-1689-43C9-AB48-81BF2439C68F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{94709E2D-1689-43C9-AB48-81BF2439C68F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{94709E2D-1689-43C9-AB48-81BF2439C68F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{94709E2D-1689-43C9-AB48-81BF2439C68F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F818BD81-27D3-466A-AE1F-AC2DC656E61C}
+	EndGlobalSection
+EndGlobal

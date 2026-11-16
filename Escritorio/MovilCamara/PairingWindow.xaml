@@ -1,0 +1,56 @@
+<Window x:Class="MovilCamara.PairingWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Agregar teléfono · WT MultiCam"
+ Width="650" Height="760" MinWidth="560" MinHeight="650" Background="#111B2C" Foreground="#EDF3FC"
+ WindowStartupLocation="CenterOwner" Closed="OnClosed">
+ <Window.Resources>
+  <Style TargetType="Button">
+   <Setter Property="Background" Value="#2468BB"/><Setter Property="Foreground" Value="White"/>
+   <Setter Property="BorderThickness" Value="0"/><Setter Property="Cursor" Value="Hand"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+    <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="7" Padding="{TemplateBinding Padding}">
+     <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Border>
+    <ControlTemplate.Triggers>
+     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Opacity" Value=".8"/></Trigger>
+     <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Surface" Property="Opacity" Value=".5"/></Trigger>
+     <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="#83C8FF"/><Setter TargetName="Surface" Property="BorderThickness" Value="2"/></Trigger>
+    </ControlTemplate.Triggers>
+   </ControlTemplate></Setter.Value></Setter>
+  </Style>
+ </Window.Resources>
+ <ScrollViewer VerticalScrollBarVisibility="Auto">
+  <StackPanel Margin="24">
+   <TextBlock Text="Agregar teléfono" FontSize="26" FontWeight="SemiBold"/>
+   <TextBlock Text="Detección automática, IP manual, USB y QR" Margin="0,6,0,18" Foreground="#9AAEC8"/>
+   <TextBlock Text="1. Abre WT MultiCam en el teléfono. El panel del PC lo detectará en la misma red." TextWrapping="Wrap"/>
+   <TextBlock Text="2. Elige la IP del PC y escanea este QR desde la app Android para autorizar la conexión." TextWrapping="Wrap" Margin="0,10,0,10"/>
+   <ComboBox x:Name="HostAddress" SelectionChanged="AddressChanged" Padding="8" Margin="0,0,0,10"/>
+   <Image x:Name="QrImage" Width="240" Height="240" HorizontalAlignment="Center"/>
+   <Button Content="Generar / renovar QR (válido 2 minutos, un solo uso)" Click="Renew_Click" Padding="10" Margin="0,10"/>
+   <TextBlock x:Name="TicketStatus" TextWrapping="Wrap" Foreground="#83C8FF"/>
+   <Expander Header="Conexión manual: copiar código de emparejamiento" Margin="0,12" Foreground="#EDF3FC">
+    <StackPanel>
+     <TextBlock Text="Si el escáner no está disponible, pega este código completo en Android. Incluye una credencial temporal; compártelo solamente con tu teléfono." TextWrapping="Wrap"/>
+     <TextBox x:Name="PairingCode" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="80" VerticalScrollBarVisibility="Auto" Margin="0,8"/>
+    </StackPanel>
+   </Expander>
+   <Separator Margin="0,10"/>
+   <TextBlock Text="Agregar por dirección IP del teléfono" FontSize="17" FontWeight="SemiBold"/>
+   <Grid Margin="0,10">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <TextBox x:Name="PhoneAddress" Padding="8" ToolTip="IPv4 que muestra la app Android, por ejemplo 192.168.1.20"/>
+    <Button Grid.Column="1" Content="Buscar por IP" Click="Probe_Click" Padding="12,8" Margin="8,0,0,0"/>
+   </Grid>
+   <TextBlock Text="La búsqueda por IP agrega el dispositivo al panel; después escanea el QR o pega el código para emparejar." TextWrapping="Wrap" Foreground="#9AAEC8"/>
+   <Separator Margin="0,16"/>
+   <TextBlock Text="Conectar por USB" FontSize="17" FontWeight="SemiBold"/>
+   <TextBlock Text="Opción recomendada: conecta el cable, activa Anclaje de red USB en Android y utiliza la IP de esa red. Si no aparece automáticamente, búscala por IP." TextWrapping="Wrap" Margin="0,8"/>
+   <TextBlock Text="USB automático: requiere ADB instalado y depuración USB autorizada. Los PCs conocidos se conectan sin QR. Un PC nuevo pide confirmación en Android una sola vez. También puedes elegir el dispositivo aquí." TextWrapping="Wrap" Foreground="#9AAEC8"/>
+   <Button Content="Detectar dispositivos USB (ADB)" Click="UsbScan_Click" Padding="10" Margin="0,8"/>
+   <ComboBox x:Name="UsbDevices" Padding="8"/>
+   <Button Content="Conectar USB sin QR" Click="UsbConnect_Click" Padding="10" Margin="0,8"/>
+   <TextBlock x:Name="Result" TextWrapping="Wrap" Foreground="#83C8FF" Margin="0,10"/>
+   <TextBlock Text="Si no hay detección, permite WT MultiCam en el firewall para redes privadas. Redes de invitados o con aislamiento pueden impedir la comunicación." TextWrapping="Wrap" Foreground="#9AAEC8" Margin="0,12"/>
+  </StackPanel>
+ </ScrollViewer>
+</Window>

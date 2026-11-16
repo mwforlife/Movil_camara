@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/brand_background"
+    tools:context=".MainActivity">
+    <ScrollView android:id="@+id/connection_screen" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:paddingStart="24dp" android:paddingEnd="24dp"
+        android:paddingTop="24dp" android:paddingBottom="28dp">
+        <ImageView android:layout_width="62dp" android:layout_height="62dp"
+            android:src="@drawable/wilkenstech_emblem" android:contentDescription="@string/company_name" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="18dp" android:text="@string/app_name"
+            android:textAppearance="@style/TextAppearance.WT.Title" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/brand_credit" android:textAppearance="@style/TextAppearance.WT.Body"
+            android:textSize="13sp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="32dp" android:text="@string/welcome_title"
+            android:textAppearance="@style/TextAppearance.WT.Title" android:textSize="27sp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="10dp" android:text="@string/welcome_description"
+            android:textAppearance="@style/TextAppearance.WT.Body" android:textSize="15sp" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="28dp" android:layout_marginBottom="24dp"
+            android:orientation="vertical" android:gravity="center_horizontal"
+            android:paddingStart="22dp" android:paddingEnd="22dp" android:paddingTop="26dp"
+            android:paddingBottom="26dp" android:background="@drawable/bg_connection_card">
+            <ImageView android:layout_width="48dp" android:layout_height="48dp"
+                android:src="@drawable/ic_camera_connection" android:importantForAccessibility="no" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="14dp" android:text="@string/connect_title"
+                android:textAppearance="@style/TextAppearance.WT.Title" android:textSize="21sp"
+                android:gravity="center" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="8dp" android:text="@string/connect_description"
+                android:textAppearance="@style/TextAppearance.WT.Body" android:gravity="center" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/scan_qr_button"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:minHeight="54dp" android:layout_marginTop="20dp" android:text="@string/scan_qr"
+                android:textAllCaps="false" android:textSize="15sp" android:textColor="@android:color/white"
+                app:backgroundTint="@color/brand_primary" app:cornerRadius="10dp" />
+        </LinearLayout>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/before_start" android:textSize="11sp" android:textStyle="bold"
+            android:textColor="@color/brand_accent" />
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/camera_choice_label" android:textAppearance="@style/TextAppearance.WT.Body" />
+        <Spinner android:id="@+id/camera_choice" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:popupBackground="@color/brand_surface" android:minHeight="48dp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/quality_choice_label" android:textAppearance="@style/TextAppearance.WT.Body" />
+        <Spinner android:id="@+id/quality_profile" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:popupBackground="@color/brand_surface" android:minHeight="48dp" />
+        <TextView android:id="@+id/capability_status" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/loading_capabilities" android:textAppearance="@style/TextAppearance.WT.Body" android:textSize="12sp" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/start_video_button"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/start_video" android:textAllCaps="false" android:enabled="false"
+            android:layout_marginTop="16dp" android:minHeight="54dp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/video_profile" android:textAppearance="@style/TextAppearance.WT.Body" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="16dp" android:layout_marginBottom="24dp"
+            android:text="@string/connection_steps" android:textAppearance="@style/TextAppearance.WT.Body" />
+        <TextView android:id="@+id/connection_status" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/development_status" android:textAppearance="@style/TextAppearance.WT.Body"
+            android:textColor="@color/brand_accent" android:accessibilityLiveRegion="polite" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/network_addresses" android:textAppearance="@style/TextAppearance.WT.Body"
+            android:layout_marginTop="16dp" />
+        <TextView android:id="@+id/network_addresses" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.WT.Body" android:textIsSelectable="true" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/manual_pair_button"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/manual_pairing" android:textAllCaps="false" android:layout_marginTop="12dp" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/disconnect_button"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/disconnect" android:textAllCaps="false" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/forget_usb_button"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/forget_usb_trust" android:textAllCaps="false" />
+    </LinearLayout>
+</ScrollView>
+    <include android:id="@+id/camera_panel" layout="@layout/layout_camera" android:visibility="gone" android:layout_width="match_parent" android:layout_height="match_parent" />
+</FrameLayout>
