@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <WTAppAssembly Condition="'$(WTAppAssembly)' == ''">../../Escritorio/MovilCamara/bin/Debug/net8.0-windows/MovilCamara.dll</WTAppAssembly>
+  </PropertyGroup>
+  <ItemGroup><Reference Include="MovilCamara"><HintPath>$(WTAppAssembly)</HintPath></Reference></ItemGroup>
+</Project>

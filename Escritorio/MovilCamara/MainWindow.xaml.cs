@@ -14,6 +14,9 @@ public partial class MainWindow : Window
 {
     private ConnectionHub? hub;
     private UsbAutoConnector? usbAuto;
+    private ObsDirectServer? obsOutput;
+    private MultiViewWindow? multiView;
+    private VirtualCameraOutput? virtualCameras;
     private readonly ObservableCollection<CameraDeviceViewModel> cameraDevices = new();
     private readonly ConcurrentDictionary<string, VideoFrame> pendingFrames = new();
     private readonly Dictionary<string, VideoOutputWindow> outputWindows = new();
@@ -25,7 +28,7 @@ public partial class MainWindow : Window
         displayTimer.Tick += (_, _) => DisplayFrames();
         displayTimer.Start();
         Loaded += (_, _) => StartReceiver();
-        Closed += (_, _) => { displayTimer.Stop(); usbAuto?.Dispose(); hub?.Dispose(); foreach (var view in outputWindows.Values.ToArray()) view.Close(); };
+        Closed += (_, _) => { multiView?.Close(); displayTimer.Stop(); virtualCameras?.Dispose(); obsOutput?.Dispose(); usbAuto?.Dispose(); hub?.Dispose(); foreach (var view in outputWindows.Values.ToArray()) view.Close(); };
     }
 
     private void StartReceiver()
@@ -37,11 +40,21 @@ public partial class MainWindow : Window
             hub.Changed += () => Dispatcher.BeginInvoke(RefreshDevices);
             hub.Error += message => Dispatcher.BeginInvoke(() => DiscoveryStatus.Text = message);
             hub.ScanStatus += message => Dispatcher.BeginInvoke(() => SearchProgress.Text = message);
-            hub.FrameReceived += (id, frame) => pendingFrames[id] = frame;
+            hub.FrameReceived += (id, frame) => { pendingFrames[id] = frame; obsOutput?.Offer(id, frame); };
+            hub.AudioReceived += (id, frame) => obsOutput?.OfferAudio(id, frame);
+            hub.AudioStateChanged += (id, active) =>
+            {
+                if (!active) obsOutput?.ClearAudio(id);
+                Dispatcher.BeginInvoke(() =>
+                {
+                    var camera = cameraDevices.FirstOrDefault(c => c.Id == id);
+                    if (camera != null) camera.AudioStatus = active ? "Micrófono recibido · 48 kHz mono" : "Micrófono apagado";
+                });
+            };
             hub.VideoStateChanged += (id, active, message) => Dispatcher.BeginInvoke(() =>
             {
                 var camera = cameraDevices.FirstOrDefault(c => c.Id == id);
-                if (!active) { pendingFrames.TryRemove(id, out _); camera?.Clear(message); }
+                if (!active) { pendingFrames.TryRemove(id, out _); obsOutput?.Clear(id); virtualCameras?.Clear(id); camera?.Clear(message); }
                 else if (camera != null) camera.VideoStatus = message;
             });
             hub.ApproveConnection = (name, address, code) => Dispatcher.InvokeAsync(() =>
@@ -50,6 +63,35 @@ public partial class MainWindow : Window
                     "Confirmar conexión · WT MultiCam", MessageBoxButton.YesNo, MessageBoxImage.Question,
                     MessageBoxResult.No) == MessageBoxResult.Yes).Task;
             hub.Start();
+            virtualCameras = new VirtualCameraOutput();
+            foreach (var config in virtualCameras.Configurations)
+            {
+                if (cameraDevices.Any(c => c.Id == config.DeviceId)) continue;
+                cameraDevices.Add(new CameraDeviceViewModel(config.DeviceId) { Name = config.Name.Replace("WT MultiCam — ", ""),
+                    Status = "Teléfono desconectado", VirtualCameraActive = true, VirtualCameraStatus = "Recuperando cámara virtual…" });
+            }
+            virtualCameras.Status += (id, message) => Dispatcher.BeginInvoke(() =>
+            {
+                var camera = cameraDevices.FirstOrDefault(c => c.Id == id);
+                if (camera != null) { camera.VirtualCameraStatus = message; camera.VirtualCameraActive = virtualCameras.IsConfigured(id); }
+                SearchProgress.Text = message;
+            });
+            _ = virtualCameras.RestoreAsync();
+            try
+            {
+                var keyPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "WilkensTech", "WTMultiCam", "obs-output.key");
+                obsOutput = new ObsDirectServer(ObsFrameEncoder.Encode, ObsFrameEncoder.NoSignal(), keyPath);
+                obsOutput.Error += message => Dispatcher.BeginInvoke(() => SearchProgress.Text = message);
+                obsOutput.Start();
+                ObsOutputStatus.Text = "Directa local";
+            }
+            catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or UnauthorizedAccessException)
+            {
+                obsOutput?.Dispose(); obsOutput = null;
+                ObsOutputStatus.Text = "No disponible";
+                SearchProgress.Text = "No se pudo iniciar la salida OBS: " + ex.Message;
+            }
             usbAuto = new UsbAutoConnector(hub);
             usbAuto.Status += message => Dispatcher.BeginInvoke(() => UsbProgress.Text = message);
             usbAuto.Start();
@@ -58,6 +100,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            virtualCameras?.Dispose(); virtualCameras = null;
             hub?.Dispose(); hub = null;
             ReceiverStatus.Text = "No disponible";
             DiscoveryStatus.Text = "No se pudo iniciar el receptor: " + ex.Message;
@@ -73,7 +116,10 @@ public partial class MainWindow : Window
             var camera = cameraDevices.FirstOrDefault(c => c.Id == d.Id);
             if (camera == null) { camera = new CameraDeviceViewModel(d.Id); cameraDevices.Add(camera); }
             camera.Name = d.Name; camera.Address = d.Address; camera.IsPaired = d.Paired;
+            camera.AudioStatus = hub.IsAudioActive(d.Id) ? "Micrófono recibido · 48 kHz mono" : "Micrófono apagado";
             camera.Status = d.Paired ? "Emparejado" : "Disponible para conectar";
+            camera.VirtualCameraActive = virtualCameras?.IsConfigured(d.Id) == true;
+            if (virtualCameras?.IsActive(d.Id) == true) camera.VirtualCameraStatus = "Cámara virtual activa · 1080p30";
         }
         foreach (var old in cameraDevices.Where(c => !devices.Any(d => d.Id == c.Id)).ToArray())
         {
@@ -81,14 +127,17 @@ public partial class MainWindow : Window
             old.Status = "Teléfono desconectado";
             old.Clear("Teléfono desconectado");
             pendingFrames.TryRemove(old.Id, out _);
+            virtualCameras?.Clear(old.Id);
             // Keep an opened OBS source alive and reuse the same view model on reconnection.
             if (outputWindows.ContainsKey(old.Id)) continue;
+            if (old.HasBeenPaired) continue;
+            if (virtualCameras?.IsConfigured(old.Id) == true) continue;
             cameraDevices.Remove(old);
         }
         DeviceCount.Text = devices.Count(d => d.Paired) + " emparejados";
         DiscoveryStatus.Text = devices.Length == 0
             ? "Buscando teléfonos con WT MultiCam abierta. Si no aparecen, usa Agregar teléfono para IP, USB o QR."
-            : devices.Length + " dispositivo(s). Empareja por QR y pulsa Iniciar cámara en Android. Abre la fuente para usar Captura de ventana en OBS.";
+            : devices.Length + " dispositivo(s). Inicia la cámara en Android y copia su enlace OBS para añadir una Fuente multimedia.";
     }
 
     private void DisplayFrames()
@@ -114,11 +163,12 @@ public partial class MainWindow : Window
                     if (rotation != 0) { source = new TransformedBitmap(source, new RotateTransform(rotation)); source.Freeze(); }
                     if (frame.Mirrored) { source = new TransformedBitmap(source, new ScaleTransform(-1, 1)); source.Freeze(); }
                     camera.Display(source, frame.Received);
+                    virtualCameras?.Offer(camera.Id, source);
                 }
                 catch (Exception ex) when (ex is IOException or FormatException or NotSupportedException or ArgumentException or System.Runtime.InteropServices.COMException)
                 { camera.Clear("Frame no compatible"); }
             }
-            else if (camera.HasFrame && DateTime.UtcNow - camera.LastFrame > TimeSpan.FromSeconds(3)) camera.Clear("Sin señal de video");
+            else if (camera.HasFrame && DateTime.UtcNow - camera.LastFrame > TimeSpan.FromSeconds(3)) { camera.Clear("Sin señal de video"); virtualCameras?.Clear(camera.Id); }
         }
     }
 
@@ -136,6 +186,52 @@ public partial class MainWindow : Window
         outputWindows[id] = output;
         output.Closed += (_, _) => outputWindows.Remove(id);
         output.Show();
+    }
+
+    private void CopyObsLink_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button button || button.Tag is not string id) return;
+        if (obsOutput == null)
+        {
+            MessageBox.Show(this, "La salida directa no está disponible. Revisa el estado del receptor.", "WT MultiCam");
+            return;
+        }
+        try
+        {
+            Clipboard.SetText(obsOutput.GetUrl(id));
+            MessageBox.Show(this,
+                "Enlace copiado. En OBS:\n\n1. Añade una Fuente multimedia.\n2. Desmarca Archivo local.\n3. Pega el enlace en Entrada.\n4. En Formato de entrada escribe matroska.\n5. Ajusta Buffering de la red a 0 MB.\n\nActiva Enviar micrófono en Android para recibir audio.\n\nCrea una fuente por teléfono y mantén WT MultiCam abierto. No necesitas abrir ni capturar una ventana.",
+                "Conectar cámara a OBS", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or ArgumentException)
+        { SearchProgress.Text = "No se pudo copiar el enlace OBS: " + ex.Message; }
+    }
+
+    private async void VirtualCamera_Click(object sender, RoutedEventArgs e)
+    {
+        if (virtualCameras == null || sender is not System.Windows.Controls.Button button || button.Tag is not string id) return;
+        var camera = cameraDevices.FirstOrDefault(c => c.Id == id);
+        if (camera == null) return;
+        if (!camera.HasBeenPaired && !virtualCameras.IsConfigured(id))
+        { SearchProgress.Text = "Empareja el teléfono antes de activar su cámara virtual."; return; }
+        button.IsEnabled = false;
+        try
+        {
+            if (virtualCameras.IsConfigured(id)) await virtualCameras.DisableAsync(id);
+            else
+            {
+                await virtualCameras.EnableAsync(id, camera.Name);
+                if (camera.Source != null) virtualCameras.Offer(id, camera.Source);
+                MessageBox.Show(this, "En OBS añade Dispositivo de captura de video y selecciona WT MultiCam — " + camera.Name +
+                    ".\n\nUsa 1920 × 1080, 30 FPS y NV12. Mantén el receptor abierto.\nPara el micrófono conserva la Fuente multimedia activa, debajo de la cámara virtual en la lista de fuentes.",
+                    "Cámara virtual", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        { camera.VirtualCameraStatus = "Registro cancelado. Puedes activarla de nuevo cuando quieras."; }
+        catch (Exception ex)
+        { camera.VirtualCameraStatus = "No se pudo activar la cámara virtual: " + ex.Message; SearchProgress.Text = camera.VirtualCameraStatus; }
+        finally { camera.VirtualCameraActive = virtualCameras.IsConfigured(id); button.IsEnabled = true; }
     }
 
     private async void ScanNow_Click(object sender, RoutedEventArgs e)
@@ -183,5 +279,17 @@ public partial class MainWindow : Window
     {
         if (hub == null) { StartReceiver(); if (hub == null) return; }
         new PairingWindow(hub) { Owner = this }.ShowDialog();
+    }
+    private void OpenMultiview_Click(object sender, RoutedEventArgs e)
+    {
+        if (hub == null) { StartReceiver(); if (hub == null) return; }
+        if (multiView != null)
+        {
+            if (multiView.WindowState == WindowState.Minimized) multiView.WindowState = WindowState.Normal;
+            multiView.Show(); multiView.Activate(); return;
+        }
+        multiView = new MultiViewWindow(cameraDevices, hub);
+        multiView.Closed += (_, _) => multiView = null;
+        multiView.Show();
     }
 }

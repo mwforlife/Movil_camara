@@ -1,0 +1,97 @@
+<Window x:Class="MovilCamara.MultiViewWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="WT MultiCam — Multiview" Width="1400" Height="900" MinWidth="1000" MinHeight="720"
+ Background="#0C1220" Foreground="#EDF3FC" FontFamily="Segoe UI" WindowStartupLocation="CenterScreen"
+ Icon="Assets/wilkenstech-emblem.png">
+ <Window.Resources>
+  <Style TargetType="Button">
+   <Setter Property="Background" Value="#2468BB"/><Setter Property="Foreground" Value="White"/>
+   <Setter Property="Padding" Value="12,9"/><Setter Property="Margin" Value="0,5,0,5"/>
+   <Setter Property="BorderThickness" Value="0"/><Setter Property="Cursor" Value="Hand"/>
+   <Style.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".35"/></Trigger></Style.Triggers>
+  </Style>
+  <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style>
+ </Window.Resources>
+ <Grid Margin="20">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <DockPanel Margin="0,0,0,16">
+   <Image Source="Assets/wilkenstech-emblem.png" Width="42" Height="42" Margin="0,0,14,0"/>
+   <StackPanel><TextBlock Text="MULTIVIEW" FontSize="25" FontWeight="SemiBold"/>
+    <TextBlock Text="Selecciona una cámara para monitorizarla y ajustar sus controles." Foreground="#9AAEC8" Margin="0,5,0,0"/>
+   </StackPanel>
+  </DockPanel>
+  <Grid Grid.Row="1">
+   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="290"/></Grid.ColumnDefinitions>
+   <Grid Margin="0,0,16,0">
+    <Grid.RowDefinitions><RowDefinition Height="4*"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <Border x:Name="MainMonitor" Background="Black" BorderBrush="#75C4FA" BorderThickness="2" CornerRadius="8" Padding="4">
+     <Grid>
+      <TextBlock Text="Selecciona una cámara vinculada.&#10;Si está detenida, inicia el envío en Android." Foreground="#9AAEC8" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
+      <Image Source="{Binding SelectedItem.Source, ElementName=CameraTiles}" Stretch="Uniform"/>
+      <Border Background="#D0152238" VerticalAlignment="Bottom" Padding="12,8">
+       <StackPanel><TextBlock Text="{Binding SelectedItem.Name, ElementName=CameraTiles}" FontSize="17" FontWeight="SemiBold"/>
+        <TextBlock Text="{Binding SelectedItem.VideoStatus, ElementName=CameraTiles}" Foreground="#9AAEC8" Margin="0,3,0,0"/>
+        <TextBlock Text="{Binding SelectedItem.AudioStatus, ElementName=CameraTiles}" Foreground="#75C4FA" FontSize="11" Margin="0,3,0,0"/>
+       </StackPanel>
+      </Border>
+     </Grid>
+    </Border>
+    <TextBlock Grid.Row="1" x:Name="CameraCount" Text="Cámaras vinculadas" Foreground="#9AAEC8" Margin="4,14,0,8"/>
+    <ListBox x:Name="CameraTiles" Grid.Row="2" SelectionChanged="CameraSelected" SizeChanged="TileAreaChanged" Background="Transparent" BorderThickness="0"
+      ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
+     <ListBox.ItemsPanel><ItemsPanelTemplate>
+      <StackPanel Orientation="Horizontal"/>
+     </ItemsPanelTemplate></ListBox.ItemsPanel>
+     <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem">
+      <Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="4"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="VerticalAlignment" Value="Top"/>
+      <Setter Property="Width" Value="{Binding TileWidth, RelativeSource={RelativeSource AncestorType=Window}}"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
+       <Border x:Name="TileBorder" BorderBrush="#30445F" BorderThickness="2" Background="#111B2B" CornerRadius="6" Padding="3">
+        <ContentPresenter/>
+       </Border>
+       <ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="TileBorder" Property="BorderBrush" Value="#75C4FA"/></Trigger></ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+     </Style></ListBox.ItemContainerStyle>
+     <ListBox.ItemTemplate><DataTemplate>
+      <Grid Height="{Binding TileHeight, RelativeSource={RelativeSource AncestorType=Window}}" ToolTip="{Binding VideoStatus}">
+       <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+       <Border Background="Black"><Grid>
+        <TextBlock Text="Sin señal" Foreground="#9AAEC8" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        <Image Source="{Binding Source}" Stretch="Uniform"/>
+       </Grid></Border>
+       <StackPanel Grid.Row="1" Margin="5,3">
+        <TextBlock Text="{Binding Name}" Foreground="#EDF3FC" FontWeight="SemiBold" FontSize="11" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+        <TextBlock Text="{Binding Status}" Foreground="#75C4FA" FontSize="10" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+       </StackPanel>
+      </Grid>
+     </DataTemplate></ListBox.ItemTemplate>
+    </ListBox>
+   </Grid>
+   <Border Grid.Column="1" Background="#152238" CornerRadius="10" Padding="18">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
+     <TextBlock Text="CONTROL REMOTO" FontSize="16" FontWeight="SemiBold"/>
+     <TextBlock Text="{Binding SelectedItem.Name, ElementName=CameraTiles}" Foreground="#75C4FA" Margin="0,8,0,5"/>
+     <TextBlock x:Name="RemoteStatus" Text="Esperando una cámara" Foreground="#9AAEC8" Margin="0,0,0,18"/>
+     <StackPanel x:Name="ControlsPanel" IsEnabled="False">
+      <TextBlock Text="Zoom" FontWeight="SemiBold"/>
+      <TextBlock Text="{Binding Value, ElementName=ZoomSlider, StringFormat={}{0:F2}×}" Foreground="#75C4FA" FontSize="22" Margin="0,6"/>
+      <Slider x:Name="ZoomSlider" Minimum="1" Maximum="1" Value="1" SmallChange=".1" LargeChange=".5" ValueChanged="ZoomChanged" AutomationProperties.Name="Zoom de la cámara seleccionada"/>
+      <Button x:Name="ZoomReset" Content="Restablecer zoom" Click="ResetZoom" Background="#263A54"/>
+      <Separator Margin="0,15" Background="#30445F"/>
+      <TextBlock Text="Compensación de exposición" FontWeight="SemiBold"/>
+      <TextBlock Text="{Binding Value, ElementName=ExposureSlider, StringFormat='Pasos: {0:F0}'}" Foreground="#9AAEC8" Margin="0,7"/>
+      <Slider x:Name="ExposureSlider" Minimum="0" Maximum="0" IsSnapToTickEnabled="True" TickFrequency="1" SmallChange="1" AutomationProperties.Name="Compensación de exposición"/>
+      <Button x:Name="ExposureApply" Content="Aplicar exposición" Click="ApplyExposure"/>
+      <Separator Margin="0,15" Background="#30445F"/>
+      <Button x:Name="FocusButton" Content="Reenfocar" Click="AutoFocus"/>
+      <Button x:Name="TorchButton" Content="Encender linterna" Click="ToggleTorch"/>
+     </StackPanel>
+     <TextBlock Text="Los controles disponibles dependen de la cámara. Inicia el envío en Android para habilitarlos." Foreground="#9AAEC8" FontSize="12" Margin="0,18,0,0"/>
+    </StackPanel></ScrollViewer>
+   </Border>
+  </Grid>
+  <TextBlock Grid.Row="2" x:Name="CommandStatus" Text="Monitor de control. Cada cámara conserva su fuente independiente en OBS." Foreground="#9AAEC8" Margin="2,14,0,0"/>
+ </Grid>
+</Window>

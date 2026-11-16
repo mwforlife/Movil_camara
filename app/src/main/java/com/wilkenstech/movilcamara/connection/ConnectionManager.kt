@@ -44,12 +44,56 @@ class ConnectionManager(
     private val name = (Build.MANUFACTURER + " " + Build.MODEL).take(100)
     private val workers = Executors.newFixedThreadPool(4)
     private val scheduler = Executors.newSingleThreadScheduledExecutor()
+    private val controlWorker = Executors.newSingleThreadExecutor()
+    private val controlLoopActive = AtomicBoolean(false)
+    @Volatile var controlsProvider: () -> JSONObject = { JSONObject() }
+    @Volatile var controlHandler: (JSONObject) -> JSONObject = { JSONObject().put("ok", false).put("message", "Controles no disponibles") }
     @Volatile private var running = false
     @Volatile private var closed = false
     private var udp: DatagramSocket? = null
     private var tcp: ServerSocket? = null
     private var pulse: ScheduledFuture<*>? = null
     private data class Session(val host: String, val port: Int, val pin: String, val secret: String)
+    private val rememberedStore = RememberedConnections(context)
+    private val rememberedLock = Any()
+    private val remembered = mutableListOf<Session>()
+    private val discoveryHosts = java.util.concurrent.ConcurrentLinkedQueue<String>()
+    private var reconnectCursor = 0
+    @Volatile private var autoReconnect = true
+    init {
+        try {
+            val array = org.json.JSONArray(rememberedStore.read() ?: "[]")
+            for (i in 0 until minOf(array.length(), 8)) {
+                val r = array.getJSONObject(i)
+                val host = r.getString("host")
+                val pin = r.getString("pin")
+                val secret = r.getString("secret")
+                if (host.matches(Regex("([0-9]{1,3}\\.){3}[0-9]{1,3}")) && host.split('.').all { it.toInt() in 0..255 } &&
+                    pin.matches(Regex("[0-9a-f]{64}")) && secret.matches(Regex("[0-9a-f]{64}")))
+                    remembered.add(Session(host, 47779, pin, secret))
+            }
+        } catch (_: Exception) { rememberedStore.clear() }
+    }
+    private fun rememberSession(value: Session) = synchronized(rememberedLock) {
+        for (i in remembered.indices) if (remembered[i].pin == value.pin)
+            remembered[i] = remembered[i].copy(secret = value.secret)
+        remembered.removeAll { it.pin == value.pin && it.host == value.host }
+        remembered.add(0, value)
+        while (remembered.size > 8) remembered.removeAt(remembered.lastIndex)
+        val array = org.json.JSONArray()
+        remembered.forEach { array.put(JSONObject().put("host", it.host).put("pin", it.pin).put("secret", it.secret)) }
+        try { rememberedStore.write(array.toString()) }
+        catch (_: Exception) { onStatus("Conectado; no se pudo guardar el vínculo en este teléfono") }
+    }
+    @Synchronized private fun installSession(value: Session, generation: Int): Boolean {
+        if (closed || generation != pairingGeneration.get()) return false
+        session = value
+        autoReconnect = true
+        suppressedUsbPin = null
+        rememberPc(value.pin)
+        rememberSession(value)
+        return true
+    }
     @Volatile private var session: Session? = null
     private val pairingGeneration = AtomicInteger()
     val isPaired: Boolean get() = session != null
@@ -76,9 +120,10 @@ class ConnectionManager(
         invitationPending.set(false)
     }
 
-    fun forgetUsbTrust() {
+    @Synchronized fun forgetUsbTrust() {
         suppressedUsbPin = session?.pin
         prefs.edit().remove("trusted_pc_pins").apply()
+        synchronized(rememberedLock) { remembered.clear(); rememberedStore.clear() }
         disconnect()
     }
 
@@ -102,12 +147,18 @@ class ConnectionManager(
             }
             tcp = t
             running = true
+            startControlLoop()
             workers.execute {
                 while (running && !u.isClosed) {
                     try {
                         val packet = DatagramPacket(ByteArray(256), 256)
                         u.receive(packet)
                         if (String(packet.data, 0, packet.length, Charsets.UTF_8) == "WTMULTICAM_DISCOVER_V1") {
+                            val host = packet.address.hostAddress
+                            if (host != null && !discoveryHosts.contains(host)) {
+                                discoveryHosts.add(host)
+                                while (discoveryHosts.size > 8) discoveryHosts.poll()
+                            }
                             val bytes = metadata().toByteArray(Charsets.UTF_8)
                             u.send(DatagramPacket(bytes, bytes.size, packet.address, packet.port))
                         }
@@ -126,7 +177,7 @@ class ConnectionManager(
                                 val invite = JSONObject(payload)
                                 val source = socket.inetAddress.hostAddress
                                 val usb = invite.optString("action") == "usbInvite"
-                                val usbAllowed = usb && socket.inetAddress.isLoopbackAddress && source == "127.0.0.1" && usbAttached() &&
+                                val usbAllowed = autoReconnect && usb && socket.inetAddress.isLoopbackAddress && source == "127.0.0.1" && usbAttached() &&
                                     suppressedUsbPin != invite.optString("pin")
                                 val valid = (invite.optString("action") == "invite" || usbAllowed) && invite.optString("app") == "wtmulticam" &&
                                     invite.optInt("v") == 1 && invite.optInt("port") == 47779 && invite.optString("host") == source &&
@@ -162,6 +213,7 @@ class ConnectionManager(
     }
 
     fun pair(payload: String) {
+        autoReconnect = false
         val generation = pairingGeneration.incrementAndGet()
         workers.execute {
             try {
@@ -180,9 +232,7 @@ class ConnectionManager(
                 require(result.optBoolean("ok")) { "QR caducado o utilizado. Genera uno nuevo en el PC." }
                 val secret = result.getString("secret")
                 require(secret.matches(Regex("[0-9a-f]{64}"))) { "Respuesta de sesión inválida" }
-                if (closed || generation != pairingGeneration.get()) return@execute
-                session = initial.copy(secret = secret)
-                rememberPc(pin)
+                if (!installSession(initial.copy(secret = secret), generation)) return@execute
                 onStatus("Emparejado con " + host + " · video pendiente")
             } catch (ex: Exception) {
                 if (!closed && generation == pairingGeneration.get()) onStatus("No se pudo emparejar: " + ex.localizedMessage)
@@ -205,9 +255,7 @@ class ConnectionManager(
                 require(result.optBoolean("ok")) { "Conexión rechazada o solicitud caducada" }
                 val sessionSecret = result.getString("secret")
                 require(sessionSecret.matches(Regex("[0-9a-f]{64}"))) { "Respuesta inválida" }
-                if (closed || generation != pairingGeneration.get()) return@execute
-                session = initial.copy(secret = sessionSecret)
-                rememberPc(initial.pin)
+                if (!installSession(initial.copy(secret = sessionSecret), generation)) return@execute
                 onStatus(if (usb) "Conectado por USB · listo para iniciar cámara" else "Emparejado con " + initial.host + " · video pendiente")
             } catch (ex: Exception) {
                 if (!closed && generation == pairingGeneration.get()) onStatus("No se pudo conectar: " + ex.localizedMessage)
@@ -216,26 +264,82 @@ class ConnectionManager(
     }
 
     private fun heartbeat() {
-        val current = session ?: return
         if (!running) return
+        val current = session
+        if (current == null) { reconnectRemembered(); return }
         try {
             val response = request(current, "heartbeat")
-            if (session !== current) return
-            if (response.optBoolean("ok")) onStatus("Emparejado con " + current.host + " · video pendiente")
-            else {
-                session = null
-                onStatus("La sesión terminó. Escanea un QR nuevo en el PC.")
+            synchronized(this) {
+                if (session !== current) return
+                if (response.optBoolean("ok")) onStatus("Emparejado con ${current.host} · video pendiente")
+                else {
+                    session = null
+                    onStatus("Vínculo no disponible · reintentando conexión guardada")
+                }
             }
         } catch (_: Exception) {
-            if (session === current && running) onStatus("PC sin respuesta · reintentando conexión…")
+            synchronized(this) {
+                if (session === current && running) {
+                    session = null
+                    onStatus("PC sin respuesta · reintentando conexión")
+                }
+            }
+        }
+    }
+    private fun reconnectRemembered() {
+        if (!autoReconnect || closed || !running) return
+        val generation = pairingGeneration.get()
+        val saved = synchronized(rememberedLock) { remembered.toList() }
+        val hosts = discoveryHosts.toList()
+        val attempts = saved.flatMap { s ->
+            (if (s.host != "127.0.0.1" || usbAttached()) listOf(s) else emptyList()) + hosts.map { s.copy(host = it) }
+        }.distinct()
+        if (attempts.isEmpty()) return
+        val candidate = attempts[(reconnectCursor++ and Int.MAX_VALUE) % attempts.size]
+        try {
+            val result = request(candidate, "heartbeat")
+            synchronized(this) {
+                if (result.optBoolean("ok") && autoReconnect && !closed && running &&
+                    generation == pairingGeneration.get() && session == null && installSession(candidate, generation)) {
+                    onStatus("Vínculo recuperado con ${candidate.host} · listo para iniciar cámara")
+                }
+            }
+        } catch (_: Exception) { /* Retry one bounded candidate per heartbeat, using saved TLS pin. */ }
+    }
+
+    private fun startControlLoop() {
+        if (!controlLoopActive.compareAndSet(false, true)) return
+        controlWorker.execute {
+            var ack: JSONObject? = null
+            try {
+                while (running && !closed) {
+                    val current = session
+                    if (current == null) { ack = null; Thread.sleep(250); continue }
+                    try {
+                        val response = request(current, "control", controls = controlsProvider(), ack = ack)
+                        if (session !== current) { ack = null; continue }
+                        ack = null
+                        if (!response.optBoolean("ok")) { Thread.sleep(2000); continue }
+                        val command = response.optJSONObject("command")
+                        if (command != null) ack = controlHandler(command).put("id", command.getString("id"))
+                    } catch (_: Exception) { if (running && !closed) Thread.sleep(1000) }
+                }
+            } catch (_: InterruptedException) { }
+            finally {
+                controlLoopActive.set(false)
+                if (running && !closed) startControlLoop()
+            }
         }
     }
 
-    private fun request(s: Session, action: String, invitation: String? = null): JSONObject {
+    private fun request(s: Session, action: String, invitation: String? = null, controls: JSONObject? = null, ack: JSONObject? = null): JSONObject {
         PinnedTls.connect(s.host, s.port, s.pin).use { socket ->
                 if (invitation != null) socket.soTimeout = 65000
+                if (action == "control") socket.soTimeout = 8000
                 val message = JSONObject().put("action", action).put("id", id).put("name", name).put("secret", s.secret)
                 if (invitation != null) message.put("invitation", invitation)
+                if (controls != null) message.put("controls", controls)
+                if (ack != null) message.put("ack", ack)
                 socket.outputStream.write((message.toString() + "\n").toByteArray(Charsets.UTF_8))
                 socket.outputStream.flush()
                 return JSONObject(readLimited(BufferedReader(InputStreamReader(socket.inputStream, Charsets.UTF_8))))
@@ -252,7 +356,8 @@ class ConnectionManager(
         }
         throw java.io.IOException("Respuesta demasiado larga")
     }
-    fun disconnect() {
+    @Synchronized fun disconnect() {
+        autoReconnect = false
         pairingGeneration.incrementAndGet()
         session?.takeIf { it.host == "127.0.0.1" }?.let { suppressedUsbPin = it.pin }
         session = null
@@ -268,5 +373,6 @@ class ConnectionManager(
         closed = true
         session = null
         workers.shutdownNow(); scheduler.shutdownNow()
+        controlWorker.shutdownNow()
     }
 }

@@ -1,0 +1,4 @@
+LIBRARY "WTMultiCam.VirtualCamera.dll"
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE

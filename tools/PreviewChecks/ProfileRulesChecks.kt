@@ -2,6 +2,10 @@ import com.wilkenstech.movilcamara.camera.ProfileRules
 import com.wilkenstech.movilcamara.camera.FramePacer
 
 fun main() {
+    check(ProfileRules.highSpeedCaptureRate(listOf(30 to 120, 120 to 120)) == 120)
+    check(ProfileRules.highSpeedCaptureRate(listOf(30 to 120)) == null)
+    check(ProfileRules.highSpeedCaptureRate(listOf(240 to 240, 120 to 120)) == 120)
+    check(ProfileRules.highSpeedCaptureRate(listOf(90 to 90, 480 to 480)) == null)
     val pacing = FramePacer(24)
     val accepted = (0 until 300).count { pacing.accept(it * 1_000_000_000L / 30) }
     check(accepted in 239..241) { "24 FPS from 30 FPS source drifted: $accepted frames in 10 seconds" }

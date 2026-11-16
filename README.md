@@ -1,5 +1,13 @@
 # WT MultiCam — WilkensTech Corp
 
+**Cámara virtual (revisión actual):** proveedor nativo Windows implementado, salida independiente 1080p30 NV12 por teléfono y botones Activar/Desactivar en el receptor. C++/Windows SDK instalados y compilación comprobada. Recompilar sólo Windows; la primera activación requiere autorizar el registro del proveedor. Falta validar el dispositivo real en OBS. El audio sigue disponible por Matroska, ya confirmado por el usuario. Ver [instalación y pruebas de cámara virtual](docs/CAMARA_VIRTUAL.md). Esta revisión sustituye las referencias históricas siguientes a proveedor o herramientas pendientes.
+
+**Audio y latencia:** micrófono opcional y nueva salida local Matroska A/V. Copiar enlace nuevo en OBS, Formato de entrada matroska y Buffering de la red 0 MB. Compilación/contenedor comprobados localmente; validación física pendiente. La integración como cámara virtual por teléfono está diagnosticada y pendiente de proveedor nativo y herramientas C++/SDK. Ver [estado y siguientes pasos](docs/AUDIO_LATENCIA_Y_CAMARA_VIRTUAL.md).
+
+**Multiview:** botón Abrir multiview en el receptor, cuadrícula ajustable y controles remotos según capacidades. Actualizar ambas apps; prueba física pendiente. Ver [multiview y controles](docs/MULTIVIEW_Y_CONTROLES.md).
+
+**Salida vigente a OBS:** conexión directa local por teléfono mediante **Fuente multimedia**, botón **Copiar enlace OBS**, sin Captura de ventana. Ver [salida directa](docs/SALIDA_OBS_DIRECTA.md). La app Android ofrece hasta 30 FPS; 60 FPS queda aplazado por instrucción del usuario. Los párrafos históricos siguientes sobre 60 FPS y salida por ventanas quedan sustituidos por este estado.
+
 **Para continuar el desarrollo:** leer [plan/PLAN.md](plan/PLAN.md), revisar [TODO](plan/TODO.md) y registrar resultados en [PRUEBAS](plan/PRUEBAS.md).
 
 Proyecto de cámara Android para producción multicámara desde Windows.

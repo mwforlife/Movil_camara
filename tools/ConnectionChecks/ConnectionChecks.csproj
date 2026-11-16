@@ -5,6 +5,12 @@
   <Compile Include="../../Escritorio/MovilCamara/Services/LocalNetworkScanner.cs" Link="LocalNetworkScanner.cs"/>
   <Compile Include="../../Escritorio/MovilCamara/Services/VideoWireProtocol.cs" Link="VideoWireProtocol.cs"/>
   <Compile Include="../../Escritorio/MovilCamara/Services/ReceiverIdentity.cs" Link="ReceiverIdentity.cs"/>
+  <Compile Include="../../Escritorio/MovilCamara/Services/ReceiverSessionStore.cs" Link="ReceiverSessionStore.cs"/>
+  <Compile Include="../../Escritorio/MovilCamara/Services/ObsDirectServer.cs" Link="ObsDirectServer.cs"/>
+  <Compile Include="../../Escritorio/MovilCamara/Services/RemoteCameraControls.cs" Link="RemoteCameraControls.cs"/>
+  <Compile Include="../../Escritorio/MovilCamara/Services/LatestValueDispatcher.cs" Link="LatestValueDispatcher.cs"/>
+  <Compile Include="../../Escritorio/MovilCamara/Services/AudioWireProtocol.cs" Link="AudioWireProtocol.cs"/>
+  <Compile Include="../../Escritorio/MovilCamara/Services/LiveMatroska.cs" Link="LiveMatroska.cs"/>
   <Compile Include="../../Escritorio/MovilCamara/Services/UsbConnector.cs" Link="UsbConnector.cs"/>
   <Compile Include="../../Escritorio/MovilCamara/Services/H264Decoder.cs" Link="H264Decoder.cs"/>
   <None Update="Fixtures/frame.jpg" CopyToOutputDirectory="PreserveNewest"/>

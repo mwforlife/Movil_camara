@@ -6,10 +6,17 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="QRCoder" Version="1.7.0" />
     <Resource Include="Assets\*.png" />
+    <Content Include="..\VirtualCamera\bin\x64\WTMultiCam.VirtualCamera.dll" Link="Native\WTMultiCam.VirtualCamera.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\VirtualCamera\Install-Provider.ps1" Link="Native\Install-Provider.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <Target Name="BuildVirtualCameraProvider" BeforeTargets="BeforeBuild" Condition="'$(DesignTimeBuild)' != 'true' And '$(SkipVirtualCameraBuild)' != 'true'">
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\VirtualCamera\Build.ps1&quot;" />
+  </Target>
 </Project>

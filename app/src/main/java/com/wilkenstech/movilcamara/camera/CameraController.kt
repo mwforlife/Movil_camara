@@ -40,10 +40,91 @@ class CameraController(
     }
     private var device: CameraDevice? = null
     private var session: CameraCaptureSession? = null
+    private var repeatingRequest: CaptureRequest.Builder? = null
+    private var activeCharacteristics: CameraCharacteristics? = null
+    @Volatile private var remoteState = RemoteCameraState()
+    fun remoteControls(): org.json.JSONObject = remoteState.copy(active = wanted && remoteState.active).json()
+
+    fun applyRemoteControl(command: org.json.JSONObject): org.json.JSONObject {
+        val run = generation
+        val task = java.util.concurrent.FutureTask {
+            val previous = repeatingRequest?.build()
+            try {
+                val state = remoteState
+                require(wanted && run == generation && state.active) { "La cámara ya no está activa" }
+                require(command.getString("cameraId") == state.cameraId) { "La cámara seleccionada cambió" }
+                val request = checkNotNull(repeatingRequest)
+                val configured = checkNotNull(session)
+                val c = checkNotNull(activeCharacteristics)
+                val value = command.getDouble("value")
+                require(value.isFinite()) { "Valor inválido" }
+                var next = state
+                when (command.getString("operation")) {
+                    "zoom" -> {
+                        require(value >= state.minZoom && value <= state.maxZoom) { "Zoom fuera de rango" }
+                        val ratios = if (android.os.Build.VERSION.SDK_INT >= 30) c.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE) else null
+                        if (ratios != null) request.set(CaptureRequest.CONTROL_ZOOM_RATIO, value.toFloat())
+                        else {
+                            val bounds = checkNotNull(c.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE))
+                            val width = (bounds.width() / value).toInt().coerceAtLeast(2)
+                            val height = (bounds.height() / value).toInt().coerceAtLeast(2)
+                            val left = bounds.left + (bounds.width() - width) / 2
+                            val top = bounds.top + (bounds.height() - height) / 2
+                            request.set(CaptureRequest.SCALER_CROP_REGION, Rect(left, top, left + width, top + height))
+                        }
+                        next = state.copy(zoom = value)
+                    }
+                    "torch" -> {
+                        require(state.torchSupported && value in listOf(0.0, 1.0)) { "Linterna no disponible" }
+                        request.set(CaptureRequest.FLASH_MODE, if (value == 1.0) CameraMetadata.FLASH_MODE_TORCH else CameraMetadata.FLASH_MODE_OFF)
+                        next = state.copy(torch = value == 1.0)
+                    }
+                    "exposure" -> {
+                        require(value == value.toInt().toDouble() && value.toInt() in state.minExposure..state.maxExposure) { "Exposición fuera de rango" }
+                        request.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, value.toInt())
+                        next = state.copy(exposure = value.toInt())
+                    }
+                    "autofocus" -> {
+                        require(state.focusSupported) { "Enfoque automático no disponible" }
+                        val modes = c.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES) ?: intArrayOf()
+                        request.set(CaptureRequest.CONTROL_AF_MODE, if (modes.contains(CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO))
+                            CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO else CameraMetadata.CONTROL_AF_MODE_AUTO)
+                        request.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_CANCEL)
+                        configured.capture(request.build(), null, handler)
+                        request.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_START)
+                        configured.capture(request.build(), null, handler)
+                        request.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_IDLE)
+                    }
+                    else -> throw IllegalArgumentException("Control no permitido")
+                }
+                configured.setRepeatingRequest(request.build(), null, handler)
+                remoteState = next
+                org.json.JSONObject().put("ok", true).put("message", "Ajuste aplicado en Android")
+            } catch (ex: Exception) {
+                if (previous != null) try {
+                    repeatingRequest?.apply {
+                        if (android.os.Build.VERSION.SDK_INT >= 30) set(CaptureRequest.CONTROL_ZOOM_RATIO, previous.get(CaptureRequest.CONTROL_ZOOM_RATIO))
+                        set(CaptureRequest.SCALER_CROP_REGION, previous.get(CaptureRequest.SCALER_CROP_REGION))
+                        set(CaptureRequest.FLASH_MODE, previous.get(CaptureRequest.FLASH_MODE))
+                        set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, previous.get(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION))
+                        set(CaptureRequest.CONTROL_AF_MODE, previous.get(CaptureRequest.CONTROL_AF_MODE))
+                        set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_IDLE)
+                    }
+                } catch (_: Exception) { }
+                org.json.JSONObject().put("ok", false).put("message", ex.localizedMessage ?: "No se pudo aplicar el ajuste")
+            }
+        }
+        if (closed || !handler.post(task)) return org.json.JSONObject().put("ok", false).put("message", "Cámara cerrada")
+        return try { task.get(2500, java.util.concurrent.TimeUnit.MILLISECONDS) }
+        catch (_: Exception) { task.cancel(false); org.json.JSONObject().put("ok", false).put("message", "La cámara no respondió al ajuste") }
+    }
     private var reader: ImageReader? = null
     private var previewSurface: Surface? = null
     @Volatile private var wanted = false
     @Volatile private var generation = 0
+    // TextureView can retain its transform while its camera buffer is replaced.
+    // Reapply only when the first buffer of the configured session reaches the view.
+    @Volatile private var previewTransformGeneration = -1
     @Volatile private var closed = false
     private var pendingOpens = 0
     @Volatile private var facing = CameraCharacteristics.LENS_FACING_BACK
@@ -79,7 +160,12 @@ class CameraController(
             }
             override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) { transform() }
             override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean { stop(); return true }
-            override fun onSurfaceTextureUpdated(texture: SurfaceTexture) = Unit
+            override fun onSurfaceTextureUpdated(texture: SurfaceTexture) {
+                if (wanted && previewTransformGeneration == generation) {
+                    previewTransformGeneration = -1
+                    transform()
+                }
+            }
         }
     }
     fun start() {
@@ -96,17 +182,19 @@ class CameraController(
     private fun open() {
         val run = ++generation
         handler.post {
-            releaseCamera()
             if (!wanted || run != generation) return@post
+            releaseCamera()
             try {
                 if (activity.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
                     throw SecurityException("Permiso de cámara no concedido")
                 val chosen = selectedProfile
+                require(chosen == null || chosen.fps <= 30) { "Esta versión admite hasta 30 FPS" }
                 if (chosen != null) facing = chosen.facing
                 val cameraId = chosen?.cameraId ?: manager.cameraIdList.firstOrNull {
                     manager.getCameraCharacteristics(it).get(CameraCharacteristics.LENS_FACING) == facing
                 } ?: throw IllegalStateException("Este teléfono no tiene la cámara seleccionada")
                 val characteristics = manager.getCameraCharacteristics(cameraId)
+                activeCharacteristics = characteristics
                 sensorRotation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 90
                 val map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
                     ?: throw IllegalStateException("La cámara no informa tamaños compatibles")
@@ -146,7 +234,7 @@ class CameraController(
                         } catch (ex: Exception) { fail(run, "No se pudo procesar la cámara: " + ex.localizedMessage) }
                     }
                 }, handler)
-                activity.runOnUiThread { transform() }
+                activity.runOnUiThread { if (wanted && generation == run) transform() }
                 var awaitingOpen = true
                 val nativePreview = useTexturePreview
                 fun completeOpen() {
@@ -161,7 +249,7 @@ class CameraController(
                         device = camera
                         try {
                             val outputs = if (nativePreview) listOf(surface, videoSurface) else listOf(videoSurface)
-                            camera.createCaptureSession(outputs, object : CameraCaptureSession.StateCallback() {
+                            val callback = object : CameraCaptureSession.StateCallback() {
                                 override fun onConfigured(configured: CameraCaptureSession) {
                                     if (!wanted || generation != run) { configured.close(); return }
                                     session = configured
@@ -178,12 +266,24 @@ class CameraController(
                                             if (afModes.contains(CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO))
                                                 set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
                                         }
+                                        previewTransformGeneration = if (nativePreview) run else -1
                                         configured.setRepeatingRequest(request.build(), null, handler)
-                                        activity.runOnUiThread { transform() }
+                                        repeatingRequest = request
+                                        val ratios = if (android.os.Build.VERSION.SDK_INT >= 30) characteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE) else null
+                                        val exposure = characteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE)
+                                        val focusModes = characteristics.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES) ?: intArrayOf()
+                                        remoteState = RemoteCameraState(cameraId, true,
+                                            ratios?.lower?.toDouble() ?: 1.0,
+                                            ratios?.upper?.toDouble() ?: (characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM)?.toDouble() ?: 1.0),
+                                            1.0, characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true, false,
+                                            exposure?.lower ?: 0, exposure?.upper ?: 0, 0,
+                                            focusModes.contains(CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO) || focusModes.contains(CameraMetadata.CONTROL_AF_MODE_AUTO))
+                                        activity.runOnUiThread { if (wanted && generation == run) transform() }
                                     } catch (ex: Exception) { fail(run, "No se pudo iniciar captura: " + ex.localizedMessage) }
                                 }
                                 override fun onConfigureFailed(configured: CameraCaptureSession) { fail(run, "La cámara rechazó el perfil. Detén la cámara y selecciona menos resolución o FPS.") }
-                            }, handler)
+                            }
+                            camera.createCaptureSession(outputs, callback, handler)
                         } catch (ex: Exception) { fail(run, "No se pudo preparar cámara: " + ex.localizedMessage) }
                     }
                     override fun onDisconnected(camera: CameraDevice) { camera.close(); completeOpen(); fail(run, "La cámara se desconectó") }
@@ -246,6 +346,9 @@ class CameraController(
         return bytes.toByteArray()
     }
     private fun releaseCamera() {
+        repeatingRequest = null
+        activeCharacteristics = null
+        remoteState = remoteState.copy(active = false, torch = false)
         try { session?.stopRepeating() } catch (_: Exception) { }
         session?.close(); session = null
         device?.close(); device = null
@@ -255,6 +358,7 @@ class CameraController(
     }
     fun stop() {
         wanted = false; generation++
+        previewTransformGeneration = -1
         handler.post { releaseCamera() }
     }
     fun close() {

@@ -1,5 +1,83 @@
 # TODO — WT MultiCam
 
+## Audio y cámara virtual — prioridad vigente
+
+- [x] Corregir cierre prematuro al liberar IMFActivate: regresión reproducida con 0xC00D3E85 y comprobada con fuente viva y entrega de muestras tras liberar el activador.
+- [x] Usuario confirma activación y video real en OBS tras actualizar el proveedor corregido; capturas con dos fuentes de captura e imágenes distintas.
+
+- [x] AudioRecord opcional, permiso explícito, PCM 48 kHz mono y detención junto a cámara/ciclo de vida.
+- [x] Transporte TLS autenticado y validación de audio en Windows.
+- [x] Salida Matroska A/V con timestamps; reducir espera de codificación y colas de video/audio.
+- [x] Verificar contenedor generado con el FFmpeg instalado con OBS.
+- [x] Diagnosticar API de cámara virtual y requisitos nativos, sin registrar dispositivos.
+- [x] Instalar herramientas de escritorio C++ y Windows 11 SDK; compilación/enlace C++ con MFCreateVirtualCamera comprobados el 16-11-2026.
+- [x] Implementar proveedor COM Media Foundation, puente de cuadros y administrador de una cámara virtual por teléfono; compilación y muestras sintéticas comprobadas. Ver docs/CAMARA_VIRTUAL.md.
+- [x] Botones Activar/Desactivar, registro COM elevado por teléfono, identidad persistente y recuperación sin solicitar elevación automática.
+- [x] Pruebas nativas de activación, independencia de fuentes, comunicación entre procesos, muestras, reinicio, caducidad y liberación COM.
+- [x] Usuario confirma recepción correcta del audio y funcionamiento del multiview/zoom.
+- [ ] Validar activación/desactivación y enumeración real como dispositivos OBS.
+- [ ] Comprobar el instalador ya implementado desde la app (UAC), acceso del servicio Frame Server y enumeración real en OBS. Desactivar retira el dispositivo; limpieza completa de COM/DLL queda para distribución.
+- [ ] Comparar latencia virtual vs Matroska y comprobar sincronía con audio de la Fuente multimedia activa debajo del video virtual.
+- [ ] Generar APK completo nuevo y probar micrófono/permisos, Matroska en OBS, búfer 0 MB, latencia y sincronía con palmada.
+- [ ] Validar dos teléfonos, audio activado sólo donde se elija y estabilidad prolongada.
+- [ ] Definir integración separada si también se requiere dispositivo de micrófono virtual.
+
+## Revisión 80/20 y zoom continuo
+
+- [x] Ampliar monitor a aproximadamente 80 % y reservar 20 % a una franja compacta de miniaturas.
+- [x] Retirar Aplicar zoom y enviar durante el movimiento del deslizador.
+- [x] Una orden de zoom en vuelo y sólo el valor más reciente pendiente; descartar pendientes al cambiar de cámara.
+- [x] Probar serialización, sustitución de valores intermedios, descarte de pendientes y recuperación tras error en el emisor.
+- [ ] Confirmar fluidez real y valor final del zoom al soltar por USB y Wi-Fi, sin saltos ni ajustes sobre otra cámara.
+
+## Multiview y controles remotos — prioridad actual
+
+- [x] Monitor seleccionado y cuadrícula ajustable de una a cuatro columnas.
+- [x] Mantener vistas de teléfonos previamente emparejados cuando se desconectan; excluir sólo detectados.
+- [x] Zoom, exposición por pasos, autofocus y linterna remotos, limitados por capacidades.
+- [x] Cola acotada, cámara destinataria e identificador de orden con confirmación/error Android.
+- [x] Compilación WPF/Kotlin, 31 comprobaciones sin sockets y render con cinco cámaras de prueba en dos tamaños.
+- [ ] Compilar APK completo actualizado y probar controles reales en un teléfono, por USB/Wi-Fi.
+- [ ] Dos teléfonos: verificar que el ajuste sólo afecta al seleccionado y que una desconexión no corta al otro.
+- [ ] Probar corte de conexión/cambio de cámara con una orden pendiente y comprobar rechazo/caducidad.
+- [ ] Considerar persistencia de zoom/exposición y ampliar controles cuando la base esté validada.
+
+Detalles: [multiview y controles](../docs/MULTIVIEW_Y_CONTROLES.md).
+
+## OBS directo — estado más reciente
+
+- [x] Salida local independiente por teléfono, Fuente multimedia en OBS y botón Copiar enlace OBS; sin Captura de ventana.
+- [x] Compilación WPF y cinco comprobaciones adicionales de rutas, tokens, estabilidad de enlaces y MJPEG sin sockets.
+- [ ] Probar HTTP real con `ConnectionChecks --obs-output` cuando el entorno permita sockets.
+- [ ] Validar OBS con un teléfono, giro/espejo, minimizar receptor y detener/reiniciar video.
+- [ ] Validar dos teléfonos, independencia y cambios de escena; medir CPU/latencia de conversión MJPEG.
+- [ ] Validar recuperación de OBS al reiniciar receptor y conservar escenas/enlaces.
+
+La tarea anterior de complemento nativo queda como optimización futura. La salida vigente usa Fuente multimedia directa; no captura ventanas.
+
+## Prioridad vigente — 16-11-2026
+
+- [x] Retirar perfiles 60 FPS y sesión de alta velocidad de la app; perfiles disponibles hasta 30 FPS. Un perfil antiguo de 60 no se restaura.
+- [ ] Validar APK actualizado con perfil 1080p30.
+- [ ] Implementar fuente nativa OBS independiente por teléfono, sin Captura de ventana.
+- [ ] Validar reconexión y último perfil USB/Wi-Fi, icono y dos teléfonos.
+- [ ] Retomar 60 FPS sólo en una fase posterior, corrigiendo el tamaño real de las superficies. Las tareas anteriores sobre 60 quedan aplazadas.
+
+## Implementación nueva — pendiente prueba física
+
+- [x] Perfil H.264 de 60 FPS con sensor de alta velocidad anunciado y limitación previa al encoder (Android 10+).
+- [x] Icono normal/adaptativo de WilkensTech.
+- [x] Recordar último perfil utilizado por PC, transporte y cámara, validándolo contra las capacidades actuales.
+- [x] Guardar vínculos cifrados Android/Windows y reintentar autenticación con TLS fijado al PC autorizado.
+- [x] Comprobar recuperación local de vínculos Windows y rechazo de otra identidad/archivo corrupto.
+- [ ] Compilar APK completo de esta revisión y actualizar ambas apps; emparejar una vez para guardar el vínculo nuevo.
+- [ ] Medir 1080p60 de alta velocidad en Xiaomi por USB/Wi-Fi, incluyendo consumo/temperatura.
+- [ ] Comprobar icono y restauración del perfil después de reiniciar Android.
+- [ ] Comprobar reconexión tras reiniciar receptor/Android, cambio de IP y corte de red/USB.
+- [ ] Confirmar Desconectar/Olvidar y ausencia de inicio automático de cámara.
+
+Detalles: [alta velocidad y reconexión](../docs/ALTA_VELOCIDAD_Y_RECONEXION.md).
+
 Consultar primero [PLAN.md](PLAN.md). Las casillas pendientes no significan necesariamente falta de código: muchas requieren prueba física.
 
 ## Implementado y comprobado localmente
@@ -21,6 +99,8 @@ Consultar primero [PLAN.md](PLAN.md). Las casillas pendientes no significan nece
 - [x] Comprobaciones de protocolo, geometría, YUV y reglas de FPS.
 
 ## P0 — Próxima sesión: versión actual en un teléfono
+
+- [x] Corregir distorsión al detener/reiniciar en vertical por USB: usuario confirmó solución el 16-11-2026. Rendimiento y otros modos siguen pendientes.
 
 - [ ] Compilar el APK completo de la última versión, incluidas Activity y clases generadas.
 - [ ] Instalar ambas versiones actualizadas y anotar sus identificadores.

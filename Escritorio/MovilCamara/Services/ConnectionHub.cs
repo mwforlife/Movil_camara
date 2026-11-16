@@ -24,25 +24,51 @@ public sealed class ConnectionHub : IDisposable
     private readonly object ticketLock = new();
     private readonly SemaphoreSlim clients = new(16);
     private readonly ConcurrentDictionary<string, Guid> videoStreams = new();
+    private readonly ConcurrentDictionary<string, Guid> audioStreams = new();
     private readonly X509Certificate2 certificate;
+    private readonly ReceiverSessionStore? sessionStore;
+    private readonly RemoteCameraControls remoteControls = new();
+    private readonly ConcurrentDictionary<string, (CameraControls Controls, DateTime Seen)> controlStates = new();
+    public CameraControls? GetCameraControls(string id) => controlStates.TryGetValue(id, out var state) &&
+        DateTime.UtcNow - state.Seen < TimeSpan.FromSeconds(10) ? state.Controls : null;
+    public Task<CameraCommandResult> SendCameraCommandAsync(string id, string operation, double value, string? expectedCameraId = null)
+    {
+        var caps = GetCameraControls(id);
+        if (!sessions.ContainsKey(id) || caps?.Active != true)
+            return Task.FromResult(new CameraCommandResult(false, "Inicia la cámara en Android y espera el estado de controles."));
+        if (expectedCameraId != null && caps.CameraId != expectedCameraId)
+            return Task.FromResult(new CameraCommandResult(false, "La cámara seleccionada cambió. Ajusta de nuevo el zoom."));
+        if ((operation == "zoom" && (value < caps.MinZoom || value > caps.MaxZoom)) ||
+            (operation == "torch" && (!caps.TorchSupported || value is not (0 or 1))) ||
+            (operation == "exposure" && (value < caps.MinExposure || value > caps.MaxExposure || value != Math.Truncate(value))) ||
+            (operation == "autofocus" && !caps.FocusSupported))
+            return Task.FromResult(new CameraCommandResult(false, "El ajuste está fuera de las capacidades de esta cámara."));
+        return remoteControls.SendAsync(id, caps.CameraId, operation, value, stop.Token);
+    }
     private UdpClient? discovery;
     private TcpListener? listener;
     private string ticket = "";
     private DateTime ticketExpiry;
     public event Action? Changed;
     public event Action<string, VideoFrame>? FrameReceived;
+    public event Action<string, AudioFrame>? AudioReceived;
+    public event Action<string, bool>? AudioStateChanged;
     public event Action<string, bool, string>? VideoStateChanged;
     public event Action<string>? Error;
     public Func<string, string, string, Task<bool>>? ApproveConnection { get; set; }
     public event Action<string>? ScanStatus;
     public string Fingerprint => Convert.ToHexString(SHA256.HashData(certificate.RawData)).ToLowerInvariant();
     public DeviceInfo[] Devices => devices.Values.OrderBy(d => d.Name).ToArray();
+    public bool IsAudioActive(string id) => audioStreams.ContainsKey(id);
 
     public ConnectionHub(bool persistIdentity = false)
     {
         if (persistIdentity && OperatingSystem.IsWindows())
         {
             certificate = ReceiverIdentity.LoadOrCreate();
+            sessionStore = new ReceiverSessionStore(certificate, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "WilkensTech", "WTMultiCam", "connections.json"));
+            LoadSessions();
             return;
         }
         using var key = RSA.Create(2048);
@@ -51,6 +77,18 @@ public sealed class ConnectionHub : IDisposable
         certificate = new X509Certificate2(cert.Export(X509ContentType.Pfx));
     }
 
+    private void LoadSessions()
+    {
+        if (sessionStore == null) return;
+        foreach (var entry in sessionStore.Load()) sessions[entry.Key] = entry.Value;
+    }
+
+    private void SaveSessions()
+    {
+        try { sessionStore?.Save(sessions); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException)
+        { Error?.Invoke("No se pudo guardar el vínculo de los dispositivos: " + ex.Message); }
+    }
     public void Start()
     {
         listener = new TcpListener(IPAddress.Any, PairPort);
@@ -319,9 +357,63 @@ public sealed class ConnectionHub : IDisposable
                         }
                     }
                 }
-                else if (action is "heartbeat" or "video" && sessions.TryGetValue(id, out var expected))
+                else if (action is "heartbeat" or "video" or "control" or "audio" && sessions.TryGetValue(id, out var expected))
                     allowed = Equal(secret, expected);
                 if (!allowed) { await writer.WriteLineAsync("{\"ok\":false}"); return; }
+                if (action == "audio")
+                {
+                    if (r.GetProperty("audioProtocol").GetInt32() != 1 || r.GetProperty("codec").GetString() != "pcm_s16le" ||
+                        r.GetProperty("sampleRate").GetInt32() != 48000 || r.GetProperty("channels").GetInt32() != 1 ||
+                        !audioStreams.TryAdd(id, Guid.NewGuid()))
+                    { await writer.WriteLineAsync("{\"ok\":false}"); return; }
+                    try
+                    {
+                        client.NoDelay = true;
+                        await writer.WriteLineAsync("{\"ok\":true,\"audioProtocol\":1}");
+                        AudioStateChanged?.Invoke(id, true);
+                        long lastTimestamp = -1;
+                        while (!stop.IsCancellationRequested && sessions.TryGetValue(id, out var current) && Equal(secret, current))
+                        {
+                            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+                            var audio = await AudioWireProtocol.ReadAsync(ssl, timeout.Token);
+                            if (audio.TimestampUs <= lastTimestamp) throw new InvalidDataException("Reloj de audio no creciente");
+                            lastTimestamp = audio.TimestampUs;
+                            AudioReceived?.Invoke(id, audio);
+                        }
+                    }
+                    finally { audioStreams.TryRemove(id, out _); AudioStateChanged?.Invoke(id, false); }
+                    return;
+                }
+                if (action == "control")
+                {
+                    if (r.TryGetProperty("ack", out var ack) && ack.ValueKind == JsonValueKind.Object)
+                        remoteControls.Acknowledge(id, ack.GetProperty("id").GetString() ?? "", ack.GetProperty("ok").GetBoolean(),
+                            ack.TryGetProperty("message", out var message) ? message.GetString() ?? "" : "");
+                    if (r.TryGetProperty("controls", out var controls) && controls.ValueKind == JsonValueKind.Object)
+                    {
+                        var caps = JsonSerializer.Deserialize<CameraControls>(controls.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        if (caps != null && double.IsFinite(caps.MinZoom) && double.IsFinite(caps.MaxZoom) &&
+                            double.IsFinite(caps.Zoom) && caps.MinZoom > 0 && caps.MaxZoom >= caps.MinZoom && caps.MaxZoom <= 200 &&
+                            caps.Zoom >= caps.MinZoom && caps.Zoom <= caps.MaxZoom && caps.MinExposure <= caps.MaxExposure)
+                        {
+                            var changed = !controlStates.TryGetValue(id, out var previous) || previous.Controls != caps;
+                            controlStates[id] = (caps, DateTime.UtcNow);
+                            if (changed) Changed?.Invoke();
+                        }
+                    }
+                    timeout.CancelAfter(TimeSpan.FromSeconds(5));
+                    using var poll = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
+                    poll.CancelAfter(TimeSpan.FromSeconds(3));
+                    CameraCommand? command = null;
+                    try { command = await remoteControls.NextAsync(id, poll.Token); }
+                    catch (OperationCanceledException) when (!timeout.IsCancellationRequested) { }
+                    // A re-pair invalidates any outstanding poll as well as video credentials.
+                    if (!sessions.TryGetValue(id, out var currentSecret) || !Equal(secret, currentSecret))
+                    { await writer.WriteLineAsync("{\"ok\":false}"); return; }
+                    await writer.WriteLineAsync(JsonSerializer.Serialize(new { ok = true, command = command == null ? null :
+                        new { id = command.Id, cameraId = command.CameraId, operation = command.Operation, value = command.Value } }));
+                    return;
+                }
                 if (action == "video")
                 {
                     var protocol = r.GetProperty("videoProtocol").GetInt32();
@@ -383,6 +475,7 @@ public sealed class ConnectionHub : IDisposable
                 }
                 var address = ((IPEndPoint)client.Client.RemoteEndPoint!).Address.ToString();
                 devices[id] = new(id, name, address, DateTime.UtcNow, true);
+                if (action is "pair" or "requestPair") SaveSessions();
                 await writer.WriteLineAsync(JsonSerializer.Serialize(new { ok = true, secret }));
                 Changed?.Invoke();
             }

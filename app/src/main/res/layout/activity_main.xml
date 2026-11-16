@@ -55,12 +55,17 @@
             android:text="@string/quality_choice_label" android:textAppearance="@style/TextAppearance.WT.Body" />
         <Spinner android:id="@+id/quality_profile" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:popupBackground="@color/brand_surface" android:minHeight="48dp" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/capability_details"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/capability_details" android:textAllCaps="false" />
         <TextView android:id="@+id/capability_status" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="@string/loading_capabilities" android:textAppearance="@style/TextAppearance.WT.Body" android:textSize="12sp" />
         <com.google.android.material.button.MaterialButton android:id="@+id/start_video_button"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="@string/start_video" android:textAllCaps="false" android:enabled="false"
             android:layout_marginTop="16dp" android:minHeight="54dp" />
+        <CheckBox android:id="@+id/send_microphone" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/send_microphone" android:textColor="@color/brand_text" android:checked="false" android:minHeight="48dp" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="@string/video_profile" android:textAppearance="@style/TextAppearance.WT.Body" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"

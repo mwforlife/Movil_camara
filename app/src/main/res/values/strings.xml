@@ -2,8 +2,8 @@
     <string name="usb_authorize_title">Autorizar este PC por USB</string>
     <string name="usb_authorize_message">WT MultiCam del PC conectado por cable quiere emparejar este teléfono. Al autorizarlo, se recordará su identidad para conectarse automáticamente por USB sin volver a escanear un QR. La cámara se iniciará sólo cuando pulses el botón de inicio.</string>
     <string name="usb_authorize">Autorizar y recordar</string>
-    <string name="forget_usb_trust">Olvidar PCs USB</string>
-    <string name="usb_trust_forgotten">Se olvidaron los PCs autorizados. La conexión USB automática se detiene para este PC durante esta sesión.</string>
+    <string name="forget_usb_trust">Olvidar PCs vinculados</string>
+    <string name="usb_trust_forgotten">Se olvidaron los vínculos USB y Wi-Fi. Empareja nuevamente para autorizar un PC.</string>
     <string name="start_video">Iniciar cámara y enviar al PC</string>
     <string name="stop_video">Detener</string>
     <string name="switch_camera">Cambiar cámara</string>
@@ -46,4 +46,9 @@
     <string name="pairing_title">Emparejamiento por QR</string>
     <string name="pairing_pending">El escáner y el receptor se incorporarán en la siguiente etapa. Todavía no hay una conexión activa.</string>
     <string name="understood">Entendido</string>
+    <string name="capability_details">Diagnóstico de cámara</string>
+    <string name="copy_diagnostic">Copiar diagnóstico</string>
+    <string name="send_microphone">Enviar micrófono del teléfono (opcional)</string>
+    <string name="microphone_off">Micrófono apagado</string>
+    <string name="microphone_denied">Sin permiso de micrófono: se enviará sólo video.</string>
 </resources>

@@ -19,7 +19,7 @@ data class VideoEndpoint(val id: String, val name: String, val host: String, val
 class VideoSender(private val endpoint: () -> VideoEndpoint?, private val status: (String) -> Unit) {
     private val latest = AtomicReference<EncodedFrame?>()
     private val generation = AtomicInteger()
-    private val h264Queue = java.util.concurrent.ArrayBlockingQueue<EncodedFrame>(8)
+    private val h264Queue = java.util.concurrent.ArrayBlockingQueue<EncodedFrame>(3)
     private var profile: com.wilkenstech.movilcamara.camera.CaptureProfile? = null
     @Volatile private var waitingForKey = true
     var requestKeyFrame: () -> Unit = {}
@@ -34,7 +34,7 @@ class VideoSender(private val endpoint: () -> VideoEndpoint?, private val status
 
     init {
         watchdog.scheduleWithFixedDelay({
-            if (writingSince > 0 && SystemClock.elapsedRealtime() - writingSince > 6000)
+            if (writingSince > 0 && SystemClock.elapsedRealtime() - writingSince > 1500)
                 try { socket?.close() } catch (_: Exception) { }
         }, 1, 1, TimeUnit.SECONDS)
     }

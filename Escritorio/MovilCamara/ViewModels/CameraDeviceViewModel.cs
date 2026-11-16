@@ -7,8 +7,16 @@ namespace MovilCamara.ViewModels;
 public sealed class CameraDeviceViewModel : INotifyPropertyChanged
 {
     public string Id { get; }
+    private string virtualCameraStatus = "Cámara virtual desactivada";
+    private bool virtualCameraActive;
+    public string VirtualCameraStatus { get => virtualCameraStatus; set { virtualCameraStatus = value; Changed(); } }
+    public bool VirtualCameraActive { get => virtualCameraActive; set { virtualCameraActive = value; Changed(); Changed(nameof(VirtualCameraAction)); } }
+    public string VirtualCameraAction => virtualCameraActive ? "Desactivar cámara virtual" : "Activar cámara virtual";
     private string name = "", address = "", status = "", videoStatus = "Empareja por QR para enviar video";
     private bool paired;
+    private string audioStatus = "Micrófono apagado";
+    public string AudioStatus { get => audioStatus; set { if (audioStatus == value) return; audioStatus = value; Changed(); } }
+    public bool HasBeenPaired { get; private set; }
     public int RotationOffset { get; set; }
     private BitmapSource? source;
     private DateTime lastFrame = DateTime.MinValue;
@@ -26,6 +34,7 @@ public sealed class CameraDeviceViewModel : INotifyPropertyChanged
         {
             if (paired == value) return;
             paired = value;
+            if (paired) { HasBeenPaired = true; Changed(nameof(HasBeenPaired)); }
             Clear(paired ? "Pulsa Iniciar cámara y enviar al PC en Android" : "Empareja por QR para enviar video");
             Changed(); Changed(nameof(CanConnect)); Changed(nameof(WaitingMessage));
         }

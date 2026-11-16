@@ -1,14 +1,48 @@
 # PLAN — WT MultiCam
 
+## Estado más reciente — audio, latencia y cámara virtual
+
+El usuario confirmó multiview, zoom y recepción correcta del audio. La salida Matroska A/V sigue disponible; la latencia física y la sincronía aún deben medirse.
+
+Implementado proveedor COM Media Foundation x64, puente de último cuadro NV12 y administrador de una cámara virtual por teléfono. C++/SDK instalados y compilación comprobada. Botones Activar/Desactivar cámara virtual, registro elevado del proveedor por teléfono y recuperación del dispositivo al abrir el receptor. Salida inicial fija 1080p30, conservando proporción y orientación. El video virtual evita HTTP/MJPEG; el audio permanece en la Fuente multimedia. **El usuario confirmó activación y video real en OBS tras corregir 0xC00D3E85. Las capturas muestran dos teléfonos en el multiview y dos fuentes de captura con imágenes distintas en OBS.** Ver [cámaras virtuales: instalación y pruebas](../docs/CAMARA_VIRTUAL.md).
+
+Próximo paso: validar dos cámaras durante 30 minutos, desconectar/reconectar una sin afectar a la otra, recuperar las mismas fuentes tras reiniciar receptor/OBS y medir latencia/sincronía. La activación básica ya fue confirmada por el usuario. 60 FPS continúa aplazado.
+
+## Ajuste actual del multiview — 80/20 y zoom continuo
+
+Por solicitud del usuario se reserva aproximadamente 80 % para el monitor y 20 % para miniaturas compactas en franja horizontal. Se retira Aplicar zoom: el deslizador transmite cambios agrupados cada 80 ms, con una orden en vuelo y el último valor pendiente, sin acumulación. Mantiene confirmación Android y destinatario fijo. Actualizar el receptor y comprobar arrastre de zoom por USB/Wi-Fi; Android con controles remotos no requiere cambios de protocolo.
+
+## Multiview — siguiente validación
+
+Implementado multiview WPF con cuadrícula de cámaras vinculadas, monitor seleccionado y controles remotos de zoom, compensación de exposición, autofocus y linterna según capacidades. Canal TLS autenticado y confirmación Android por orden. Ver [multiview y controles](../docs/MULTIVIEW_Y_CONTROLES.md).
+
+Próximo paso: compilar/actualizar ambas apps, iniciar una cámara y abrir Abrir multiview en el receptor; comprobar ajustes reales por USB y Wi-Fi. Después dos teléfonos, selección independiente y desconexión durante una orden. UI y código comprobados localmente; controles físicos todavía pendientes. No hay conmutación de programa/tally/audio en esta revisión.
+
+## Salida OBS implementada — estado más reciente
+
+Se añade salida directa local por UUID mediante Fuente multimedia de OBS, con enlaces estables y botón Copiar enlace OBS. No necesita capturar ventanas ni instalar complemento. Compilación y protocolo comprobados localmente; pendiente prueba real en OBS. Ver [salida directa](../docs/SALIDA_OBS_DIRECTA.md). Próximo paso: actualizar receptor y APK limitado a 30 FPS, añadir una Fuente multimedia y validar imagen, orientación, minimizar, reconexión y después dos teléfonos. Un complemento propio o webcam virtual es una mejora futura, no la salida actual.
+
+## Prioridad vigente — 16-11-2026
+
+Por instrucción del usuario, se retira por ahora el modo 60 FPS y se mantiene salida hasta 1080p30 según capacidades. La prueba Xiaomi falló al preparar la sesión de alta velocidad: `Surface size 1202x2005 is not part of the high speed supported size list [1280x720, 1920x1080]`. Se aplaza su investigación.
+
+El usuario descarta Captura de ventana como integración final con OBS. La siguiente entrega es una fuente nativa independiente por teléfono mediante complemento OBS; revisar SDK y entorno de compilación. Mantener icono y persistencia de vínculos/perfiles. No priorizar monetización.
+
+## Actualización de implementación — 16-11-2026
+
+Ver [alta velocidad y reconexión](../docs/ALTA_VELOCIDAD_Y_RECONEXION.md). Se implementan perfiles 60 FPS mediante sesión de alta velocidad anunciada (Xiaomi: sensor 120, limitación a 60 antes del encoder), icono WilkensTech, último perfil por PC/transporte/cámara y vínculos persistentes cifrados Android/Windows. La distorsión de reinicio vertical USB fue confirmada como corregida por el usuario. Reportó 29 FPS en Android y 26–29 en Windows por USB/Wi-Fi a un perfil de hasta 30, sin especificar resolución/formato/duración.
+
+Próximo paso: cerrar el receptor, recompilar ambas apps, actualizar conservando datos, emparejar una vez y probar 1080p60 de alta velocidad. Después comprobar vínculo y perfil tras reiniciar ambas apps y cambiar de red/USB. La nueva implementación no está todavía validada físicamente. Las referencias históricas a sesiones sólo en memoria o ausencia de alta velocidad quedan sustituidas por esta actualización.
+
 Actualizado: 16 de noviembre de 2026.
 Empresa: WilkensTech.
-Carpeta del proyecto: C:\wamp64\www\Movil_camara.
+Carpeta del proyecto: C:\xampp\htdocs\Movil_camara.
 
 Este es el punto de entrada para continuar el desarrollo. El trabajo ejecutable está en [TODO.md](TODO.md) y las evidencias físicas se anotan en [PRUEBAS.md](PRUEBAS.md).
 
 ## 1. Qué sigue ahora
 
-El siguiente hito es **validar el APK completo y el recorrido Android → Windows con H.264**, primero a 1080p30 y después a 1080p60 cuando el teléfono lo ofrezca. Después se valida la operación con dos teléfonos simultáneos.
+El siguiente hito es **estabilidad y recuperación de dos cámaras virtuales**, con una sesión de 30 minutos, reconexión independiente y medición de latencia/sincronía. Activación y video básico en OBS confirmados por el usuario.
 
 No considerar terminado 1080p60 por haber añadido un perfil o superado una prueba local de codec. Falta medir captura, envío, recepción y presentación con el hardware real.
 
@@ -43,11 +77,11 @@ Nombre aprobado: **WT MultiCam**. Mantener los logos y la identidad de WilkensTe
 - No hay certificación de 1080p60 sostenido, multicámara ni latencia de extremo a extremo.
 - La prueba local del codec comprueba formato y píxeles, no transmisión real a 60 FPS.
 - La consulta de capacidades no garantiza que toda combinación de superficies abra y funcione sostenidamente.
-- No se implementan sesiones de alta velocidad restringida, 120 FPS ni modos privados de fabricantes.
+- Se implementan sesiones restringidas de alta velocidad para salida 60 FPS desde rangos fijos anunciados; no se ofrece salida 120 FPS ni modos privados de fabricantes.
 - El receptor usa Media Foundation; no hay ruta explícita de presentación D3D/DXVA.
 - USB automático requiere ADB, depuración autorizada, cable de datos y app abierta.
 - La cámara se inicia por acción del usuario; emparejar o conectar USB no inicia la captura.
-- La identidad del PC persiste en su almacén de certificados; las credenciales de sesión siguen en memoria.
+- La identidad del PC persiste en el almacén de certificados. Los vínculos se guardan cifrados en Android y Windows; validar recuperación física de esta revisión.
 - El entorno del asistente ha bloqueado TCP local y la comunicación con Gradle. Compilar y probar en el entorno del usuario antes de dar un hito por validado.
 
 ## 4. Reglas de trabajo acordadas

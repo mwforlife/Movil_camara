@@ -27,6 +27,7 @@ class H264Encoder(private val profile: CaptureProfile, private val orientation: 
             setInteger(MediaFormat.KEY_BIT_RATE, desiredBitrate.coerceIn(range.lower, range.upper))
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
             if (Build.VERSION.SDK_INT >= 29) setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0)
+            // Rate-limit Surface input, before AVC reference frames exist. Keep real-time PTS.
             if (Build.VERSION.SDK_INT >= 29) setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, profile.fps.toFloat())
             setInteger(MediaFormat.KEY_PRIORITY, 0)
             if (caps.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR))
