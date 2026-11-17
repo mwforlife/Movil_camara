@@ -11,6 +11,7 @@ static void Check(bool result, string name)
     if (!result) throw new Exception("FAIL: " + name);
     Console.WriteLine("PASS: " + name);
 }
+if (args.Contains("--obs-audio-output")) { await AudioOutputChecks.Run(); return; }
 using var hub = new ConnectionHub();
 if (args.Contains("--obs-output"))
 {
@@ -94,6 +95,40 @@ if (args.Contains("--offline"))
     catch (IOException) { }
     Check(!latestZoom.IsBusy, "fallo de envío libera el control de zoom");
     var remote = new RemoteCameraControls();
+    var mixer = new AudioMixer();
+    var pcmMix = new byte[6];
+    System.Buffers.Binary.BinaryPrimitives.WriteInt16LittleEndian(pcmMix.AsSpan(0, 2), short.MinValue);
+    System.Buffers.Binary.BinaryPrimitives.WriteInt16LittleEndian(pcmMix.AsSpan(2, 2), short.MaxValue);
+    System.Buffers.Binary.BinaryPrimitives.WriteInt16LittleEndian(pcmMix.AsSpan(4, 2), 1000);
+    mixer.Observe("mix-a", new(pcmMix, 0, DateTime.UtcNow));
+    mixer.SetVolume("mix-a", .5);
+    var half = mixer.Apply("mix-a", pcmMix);
+    Check(System.Buffers.Binary.BinaryPrimitives.ReadInt16LittleEndian(half.AsSpan(0, 2)) == -16384 &&
+        System.Buffers.Binary.BinaryPrimitives.ReadInt16LittleEndian(half.AsSpan(2, 2)) == 16384 &&
+        System.Buffers.Binary.BinaryPrimitives.ReadInt16LittleEndian(pcmMix.AsSpan(4, 2)) == 1000,
+        "volumen atenúa ambos extremos PCM sin modificar la entrada");
+    Check(mixer.Get("mix-a").InputPeak == 1 && Math.Abs(mixer.Get("mix-a").OutputDb + 6.0206) < .001,
+        "medidor calcula pico de salida y dBFS después del volumen");
+    mixer.SetMuted("mix-a", true);
+    Check(mixer.Apply("mix-a", pcmMix).All(b => b == 0) && mixer.Get("mix-a").InputPeak == 1 &&
+        mixer.Get("mix-a").OutputPeak == 0, "silenciar salida conserva captura/nivel de entrada y emite ceros");
+    Check(ReferenceEquals(mixer.Apply("mix-b", pcmMix), pcmMix) && !mixer.Get("mix-b").Muted,
+        "silenciar y cambiar volumen de A no afecta B");
+    mixer.SetMuted("mix-a", false);
+    Check(mixer.Apply("mix-a", pcmMix).SequenceEqual(half), "quitar silencio conserva el volumen anterior");
+    mixer.Observe("mix-a", new(pcmMix, 1, DateTime.UtcNow.AddSeconds(-1)));
+    Check(!mixer.Get("mix-a").Fresh && mixer.Get("mix-a").OutputPeak == 0, "medidor caduca cuando faltan muestras recientes");
+    mixer.Clear("mix-a");
+    Check(mixer.Get("mix-a").Volume == .5 && mixer.Get("mix-a").OutputPeak == 0,
+        "corte limpia nivel sin perder ajuste local");
+    foreach (var invalid in new[] { -1.0, 1.1, double.NaN, double.PositiveInfinity })
+    {
+        try { mixer.SetVolume("mix-a", invalid); throw new Exception("Volumen inválido aceptado"); }
+        catch (ArgumentOutOfRangeException) { }
+    }
+    Check(true, "rechazar ganancia fuera de 0 a 100 por ciento y no finita");
+    var oldCaps = JsonSerializer.Deserialize<CameraControls>("{\"CameraId\":\"rear\",\"Active\":true}")!;
+    Check(!oldCaps.AudioControlSupported && !oldCaps.MicrophoneAllowed, "Android antiguo no autoriza control de micrófono por defecto");
     using var remoteDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
     var adjustA = remote.SendAsync("device-a", "rear-0", "zoom", 2, remoteDeadline.Token);
     var commandA = await remote.NextAsync("device-a", remoteDeadline.Token);
@@ -107,6 +142,14 @@ if (args.Contains("--offline"))
     var commandB = await remote.NextAsync("device-b", remoteDeadline.Token);
     remote.Acknowledge("device-b", commandB!.Id, false, "No disponible");
     Check(!(await rejected).Ok, "rechazo del hardware se conserva como fallo");
+    var micRequest = remote.SendAsync("device-a", "rear-0", "microphone", 1, remoteDeadline.Token);
+    var micCommand = await remote.NextAsync("device-a", remoteDeadline.Token);
+    Check(micCommand?.Operation == "microphone" && !micRequest.IsCompleted &&
+        !remote.Acknowledge("device-b", micCommand!.Id, true, ""), "micrófono espera confirmación del teléfono destinatario");
+    remote.Acknowledge("device-a", micCommand!.Id, false, "Falta autorización Android");
+    Check(!(await micRequest).Ok, "rechazo de permiso Android no se convierte en micrófono activo");
+    try { await remote.SendAsync("device-a", "rear-0", "microphone", 2); throw new Exception("Micrófono inválido aceptado"); }
+    catch (ArgumentException) { Console.WriteLine("PASS: rechazar estado de micrófono distinto de activar/detener"); }
     try { await remote.SendAsync("device-a", "rear-0", "zoom", double.NaN); throw new Exception("NaN aceptado"); }
     catch (ArgumentException) { Console.WriteLine("PASS: rechazar valores de control no finitos"); }
     var outputKeyPath = Path.Combine(Path.GetTempPath(), "wt-obs-check-" + Guid.NewGuid() + ".key");
@@ -120,6 +163,16 @@ if (args.Contains("--offline"))
         Check(!direct.Authorize("/camera/phone-test-a?key=invalid", out _) && !direct.Authorize("/camera/../secret?key=" + new string('a', 64), out _), "rechazar rutas y claves OBS inválidas");
         using var reopened = new ObsDirectServer(f => f.Jpeg, Array.Empty<byte>(), outputKeyPath);
         Check(reopened.GetUrl("phone-test-a") == cameraA.AbsoluteUri, "enlace OBS estable al reiniciar el receptor");
+        var audioA = new Uri(direct.GetAudioUrl("phone-test-a"));
+        var audioB = new Uri(direct.GetAudioUrl("phone-test-b"));
+        Check(direct.Authorize(audioA.PathAndQuery, out var audioId, out var audioOnly) &&
+            audioOnly && audioId == "phone-test-a", "enlace independiente selecciona sólo audio del teléfono correcto");
+        Check(!direct.Authorize(audioA.AbsolutePath + audioB.Query, out _), "otra fuente de audio no autoriza este teléfono");
+        Check(!direct.Authorize(audioA.AbsolutePath + cameraA.Query, out _) &&
+            !direct.Authorize(cameraA.AbsolutePath + audioA.Query, out _), "las credenciales de audio y video no intercambian sus rutas");
+        Check(reopened.GetAudioUrl("phone-test-a") == audioA.AbsoluteUri, "enlace de audio estable después de reiniciar");
+        Check(!direct.Authorize(audioA.PathAndQuery.Replace("&format=matroska", ""), out _) &&
+            !direct.Authorize(audioA.PathAndQuery + "&format=other", out _), "rechazar formato ausente o campos extra en sólo audio");
         using var multipart = new MemoryStream();
         var multipartImage = new byte[] { 255, 216, 255, 217 };
         await ObsDirectServer.WritePart(multipart, multipartImage, CancellationToken.None);

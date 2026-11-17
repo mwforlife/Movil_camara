@@ -7,7 +7,7 @@ using System.Text;
 
 namespace MovilCamara.Services;
 
-/// <summary>Independent loopback MJPEG feeds. OBS reads frames directly; no HWND or screen capture.</summary>
+/// <summary>Authenticated loopback feeds: legacy MJPEG, Matroska A/V and independent PCM audio.</summary>
 public sealed class ObsDirectServer : IDisposable
 {
     public const int Port = 47780;
@@ -18,6 +18,7 @@ public sealed class ObsDirectServer : IDisposable
     private readonly Func<VideoFrame, byte[]> encode;
     private readonly byte[] placeholder;
     private readonly byte[] key;
+    private readonly AudioMixer? mixer;
     private readonly SemaphoreSlim encodeWake = new(0, 1);
     private sealed class Feed
     {
@@ -25,14 +26,15 @@ public sealed class ObsDirectServer : IDisposable
         public int Generation;
         public VideoFrame? Pending;
         public Encoded? Current;
-        public int Readers;
+        public int VideoReaders, AudioReaders;
         public long AudioSequence;
         public readonly Queue<(long Sequence, AudioFrame Frame)> Audio = new();
     }
     private sealed record Encoded(byte[] Jpeg, DateTime Received);
     public event Action<string>? Error;
-    public ObsDirectServer(Func<VideoFrame, byte[]> encoder, byte[] noSignal, string keyFile)
+    public ObsDirectServer(Func<VideoFrame, byte[]> encoder, byte[] noSignal, string keyFile, AudioMixer? audioMixer = null)
     {
+        mixer = audioMixer;
         encode = encoder; placeholder = noSignal;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(keyFile))!);
         if (File.Exists(keyFile))
@@ -59,25 +61,36 @@ public sealed class ObsDirectServer : IDisposable
         feeds.GetOrAdd(id, _ => new Feed());
         return $"http://127.0.0.1:{Port}/camera/{id}?key={Token(id)}&format=matroska";
     }
-    private static bool ValidId(string id) => id.Length is >= 8 and <= 80 && id.All(c => char.IsAsciiLetterOrDigit(c) || c == '-');
-    private string Token(string id) => Convert.ToHexString(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(id))).ToLowerInvariant();
-    internal bool Authorize(string target, out string id)
+    public string GetAudioUrl(string id)
     {
-        id = "";
+        if (!ValidId(id)) throw new ArgumentException("Identificador de cámara inválido");
+        feeds.GetOrAdd(id, _ => new Feed());
+        return $"http://127.0.0.1:{Port}/audio/{id}?key={Token(id, true)}&format=matroska";
+    }
+    private static bool ValidId(string id) => id.Length is >= 8 and <= 80 && id.All(c => char.IsAsciiLetterOrDigit(c) || c == '-');
+    private string Token(string id, bool audioOnly = false) => Convert.ToHexString(HMACSHA256.HashData(key,
+        Encoding.UTF8.GetBytes(audioOnly ? "audio:" + id : id))).ToLowerInvariant();
+    internal bool Authorize(string target, out string id) => Authorize(target, out id, out _);
+    internal bool Authorize(string target, out string id, out bool audioOnly)
+    {
+        id = ""; audioOnly = false;
         var parts = target.Split('?');
-        if (parts.Length != 2 || !parts[0].StartsWith("/camera/", StringComparison.Ordinal) || !parts[1].StartsWith("key=", StringComparison.Ordinal)) return false;
-        var candidate = parts[0][8..];
+        if (parts.Length != 2 || !parts[1].StartsWith("key=", StringComparison.Ordinal)) return false;
+        var audioRoute = parts[0].StartsWith("/audio/", StringComparison.Ordinal);
+        if (!audioRoute && !parts[0].StartsWith("/camera/", StringComparison.Ordinal)) return false;
+        var candidate = parts[0][(audioRoute ? 7 : 8)..];
         var fields = parts[1].Split('&');
         if (fields.Length > 2 || (fields.Length == 2 && fields[1] != "format=matroska")) return false;
+        if (audioRoute && fields.Length != 2) return false;
         var token = fields[0][4..];
         if (!ValidId(candidate) || token.Length != 64) return false;
-        if (!CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(token), Encoding.ASCII.GetBytes(Token(candidate)))) return false;
-        id = candidate;
+        if (!CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(token), Encoding.ASCII.GetBytes(Token(candidate, audioRoute)))) return false;
+        id = candidate; audioOnly = audioRoute;
         return true;
     }
     public void Offer(string id, VideoFrame frame)
     {
-        if (feeds.TryGetValue(id, out var feed) && Volatile.Read(ref feed.Readers) > 0)
+        if (feeds.TryGetValue(id, out var feed) && Volatile.Read(ref feed.VideoReaders) > 0)
         {
             Interlocked.Exchange(ref feed.Pending, frame);
             if (encodeWake.CurrentCount == 0) try { encodeWake.Release(); } catch (SemaphoreFullException) { }
@@ -85,7 +98,7 @@ public sealed class ObsDirectServer : IDisposable
     }
     public void OfferAudio(string id, AudioFrame frame)
     {
-        if (!feeds.TryGetValue(id, out var feed) || Volatile.Read(ref feed.Readers) == 0) return;
+        if (!feeds.TryGetValue(id, out var feed) || Volatile.Read(ref feed.AudioReaders) == 0) return;
         lock (feed.Gate)
         {
             feed.Audio.Enqueue((++feed.AudioSequence, frame));
@@ -118,7 +131,7 @@ public sealed class ObsDirectServer : IDisposable
                     VideoFrame? frame;
                     int generation;
                     lock (feed.Gate) { generation = feed.Generation; frame = Interlocked.Exchange(ref feed.Pending, null); }
-                    if (frame == null || Volatile.Read(ref feed.Readers) == 0) continue;
+                    if (frame == null || Volatile.Read(ref feed.VideoReaders) == 0) continue;
                     try
                     {
                         var encoded = new Encoded(encode(frame), frame.Received);
@@ -154,6 +167,7 @@ public sealed class ObsDirectServer : IDisposable
     private async Task Serve(TcpClient client)
     {
         Feed? feed = null;
+        bool readVideo = false, readAudio = false;
         using (client)
         using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(stop.Token))
         {
@@ -173,16 +187,19 @@ public sealed class ObsDirectServer : IDisposable
                 }
                 var request = Encoding.ASCII.GetString(bytes.ToArray()).Split("\r\n")[0].Split(' ');
                 if (bytes.Count >= 4096 || request.Length != 3 || request[0] != "GET" ||
-                    !Authorize(request[1], out var id))
+                    !Authorize(request[1], out var id, out var audioOnly))
                 {
                     await stream.WriteAsync("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray(), deadline.Token);
                     return;
                 }
                 feed = feeds.GetOrAdd(id, _ => new Feed());
-                Interlocked.Increment(ref feed.Readers);
-                if (request[1].EndsWith("&format=matroska", StringComparison.Ordinal))
+                var matroska = request[1].EndsWith("&format=matroska", StringComparison.Ordinal);
+                readVideo = !audioOnly; readAudio = matroska;
+                if (readVideo) Interlocked.Increment(ref feed.VideoReaders);
+                if (readAudio) Interlocked.Increment(ref feed.AudioReaders);
+                if (matroska)
                 {
-                    await ServeMatroska(stream, feed, deadline);
+                    await ServeMatroska(stream, feed, deadline, audioOnly, id);
                     return;
                 }
                 await stream.WriteAsync("HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=wtframe\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"u8.ToArray(), deadline.Token);
@@ -198,21 +215,33 @@ public sealed class ObsDirectServer : IDisposable
             catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or ObjectDisposedException) { }
             finally
             {
-                if (feed != null && Interlocked.Decrement(ref feed.Readers) == 0)
-                { Interlocked.Exchange(ref feed.Pending, null); Volatile.Write(ref feed.Current, null); }
+                if (feed != null)
+                {
+                    if (readVideo && Interlocked.Decrement(ref feed.VideoReaders) == 0)
+                        lock (feed.Gate) { feed.Generation++; Interlocked.Exchange(ref feed.Pending, null); Volatile.Write(ref feed.Current, null); }
+                    if (readAudio && Interlocked.Decrement(ref feed.AudioReaders) == 0)
+                        lock (feed.Gate) feed.Audio.Clear();
+                }
                 clients.Release();
             }
         }
     }
-    private async Task ServeMatroska(Stream stream, Feed feed, CancellationTokenSource deadline)
+    private async Task ServeMatroska(Stream stream, Feed feed, CancellationTokenSource deadline, bool audioOnly, string id)
     {
-        await stream.WriteAsync("HTTP/1.1 200 OK\r\nContent-Type: video/x-matroska\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"u8.ToArray(), deadline.Token);
-        var first = Volatile.Read(ref feed.Current)?.Jpeg ?? placeholder;
-        var size = VideoWireProtocol.ValidateJpeg(first);
-        await stream.WriteAsync(LiveMatroska.Header(size.Width, size.Height), deadline.Token);
+        var contentType = audioOnly ? "audio/x-matroska" : "video/x-matroska";
+        await stream.WriteAsync(Encoding.ASCII.GetBytes($"HTTP/1.1 200 OK\r\nContent-Type: {contentType}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"), deadline.Token);
+        if (audioOnly) await stream.WriteAsync(LiveMatroska.AudioOnlyHeader(), deadline.Token);
+        else
+        {
+            var first = Volatile.Read(ref feed.Current)?.Jpeg ?? placeholder;
+            var size = VideoWireProtocol.ValidateJpeg(first);
+            await stream.WriteAsync(LiveMatroska.Header(size.Width, size.Height), deadline.Token);
+        }
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var silence = new byte[AudioWireProtocol.PacketBytes];
-        long audioSequence = 0, nextAudio = 0, nextVideo = 0;
+        long audioSequence;
+        lock (feed.Gate) audioSequence = feed.AudioSequence;
+        long nextAudio = 0, nextVideo = 0;
         Encoded? previous = null;
         using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(10));
         do
@@ -230,15 +259,19 @@ public sealed class ObsDirectServer : IDisposable
                         { audio = item.Frame; audioSequence = item.Sequence; break; }
                 }
                 if (now - nextAudio > 60) nextAudio = now / 20 * 20;
-                await LiveMatroska.WriteSample(stream, 2, nextAudio, audio?.Pcm ?? silence, deadline.Token);
+                var pcm = audio == null ? silence : mixer?.Apply(id, audio.Pcm) ?? audio.Pcm;
+                await LiveMatroska.WriteSample(stream, 2, nextAudio, pcm, deadline.Token);
                 nextAudio += 20;
             }
-            var current = Volatile.Read(ref feed.Current);
-            if (current != null && DateTime.UtcNow - current.Received > TimeSpan.FromMilliseconds(500)) current = null;
-            if (now >= nextVideo && (!ReferenceEquals(current, previous) || now - nextVideo > 500 || previous == null))
+            if (!audioOnly)
             {
-                await LiveMatroska.WriteSample(stream, 1, now, current?.Jpeg ?? placeholder, deadline.Token);
-                previous = current; nextVideo = now + 30;
+                var current = Volatile.Read(ref feed.Current);
+                if (current != null && DateTime.UtcNow - current.Received > TimeSpan.FromMilliseconds(500)) current = null;
+                if (now >= nextVideo && (!ReferenceEquals(current, previous) || now - nextVideo > 500 || previous == null))
+                {
+                    await LiveMatroska.WriteSample(stream, 1, now, current?.Jpeg ?? placeholder, deadline.Token);
+                    previous = current; nextVideo = now + 30;
+                }
             }
         } while (await timer.WaitForNextTickAsync(stop.Token));
     }

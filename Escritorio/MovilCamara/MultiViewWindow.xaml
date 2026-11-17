@@ -70,10 +70,22 @@
     </ListBox>
    </Grid>
    <Border Grid.Column="1" Background="#152238" CornerRadius="10" Padding="18">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,8,0"><StackPanel>
      <TextBlock Text="CONTROL REMOTO" FontSize="16" FontWeight="SemiBold"/>
      <TextBlock Text="{Binding SelectedItem.Name, ElementName=CameraTiles}" Foreground="#75C4FA" Margin="0,8,0,5"/>
      <TextBlock x:Name="RemoteStatus" Text="Esperando una cámara" Foreground="#9AAEC8" Margin="0,0,0,18"/>
+     <StackPanel x:Name="AudioPanel" Margin="0,0,0,16" IsEnabled="False">
+      <TextBlock Text="AUDIO DEL TELÉFONO" FontWeight="SemiBold"/>
+      <TextBlock x:Name="MicrophoneState" Text="Sin micrófono" Foreground="#9AAEC8" Margin="0,7,0,6"/>
+      <ProgressBar x:Name="AudioMeter" Minimum="0" Maximum="100" Height="10" Foreground="#51CC91" Background="#263A54" BorderThickness="0" AutomationProperties.Name="Nivel de salida de audio a OBS"/>
+      <TextBlock x:Name="AudioLevelLabel" Text="Sin señal · nivel de salida" FontSize="11" Foreground="#9AAEC8" Margin="0,4,0,8"/>
+      <TextBlock x:Name="AudioVolumeLabel" Text="Volumen de salida: 100 %"/>
+      <Slider x:Name="AudioVolume" Minimum="0" Maximum="100" Value="100" SmallChange="1" LargeChange="10" ValueChanged="AudioVolumeChanged" Margin="0,8,0,4" AutomationProperties.Name="Volumen de salida del teléfono seleccionado"/>
+      <CheckBox x:Name="AudioMute" Content="Silenciar salida a OBS" Foreground="White" Checked="AudioMuteChanged" Unchecked="AudioMuteChanged" Margin="0,7,0,7"/>
+      <Button x:Name="MicrophoneToggle" Content="Activar micrófono" Click="ToggleMicrophone"/>
+      <TextBlock x:Name="AudioHelp" Text="Silenciar no detiene la captura. El micrófono necesita autorización en Android al iniciar la sesión." FontSize="11" Foreground="#9AAEC8" Margin="0,6,0,0"/>
+      <Separator Margin="0,16,0,0" Background="#30445F"/>
+     </StackPanel>
      <StackPanel x:Name="ControlsPanel" IsEnabled="False">
       <TextBlock Text="Zoom" FontWeight="SemiBold"/>
       <TextBlock Text="{Binding Value, ElementName=ZoomSlider, StringFormat={}{0:F2}×}" Foreground="#75C4FA" FontSize="22" Margin="0,6"/>

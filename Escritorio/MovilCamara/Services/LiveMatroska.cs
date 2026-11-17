@@ -32,10 +32,15 @@ public static class LiveMatroska
     public static byte[] Header(int width, int height)
     {
         if (width < 1 || height < 1 || (long)width * height > 1920 * 1080) throw new ArgumentException("Dimensiones Matroska inválidas");
+        return HeaderCore(width, height, false);
+    }
+    public static byte[] AudioOnlyHeader() => HeaderCore(0, 0, true);
+    private static byte[] HeaderCore(int width, int height, bool audioOnly)
+    {
         var ebml = Element(0x1A45DFA3, Join(UInt(0x4286, 1), UInt(0x42F7, 1), UInt(0x42F2, 4), UInt(0x42F3, 8),
             Text(0x4282, "matroska"), UInt(0x4287, 4), UInt(0x4285, 2)));
         var info = Element(0x1549A966, Join(UInt(0x2AD7B1, 1_000_000), Text(0x4D80, "WT MultiCam"), Text(0x5741, "WT MultiCam")));
-        var video = Element(0xAE, Join(UInt(0xD7, 1), UInt(0x73C5, 1), UInt(0x83, 1), UInt(0x9C, 0),
+        var video = audioOnly ? Array.Empty<byte>() : Element(0xAE, Join(UInt(0xD7, 1), UInt(0x73C5, 1), UInt(0x83, 1), UInt(0x9C, 0),
             UInt(0x23E383, 33_333_333), Text(0x86, "V_MJPEG"), Element(0xE0, Join(UInt(0xB0, (ulong)width), UInt(0xBA, (ulong)height)))));
         var rate = BitConverter.GetBytes(48000.0); if (BitConverter.IsLittleEndian) Array.Reverse(rate);
         var audio = Element(0xAE, Join(UInt(0xD7, 2), UInt(0x73C5, 2), UInt(0x83, 2), UInt(0x9C, 0),

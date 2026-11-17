@@ -1,11 +1,100 @@
-## Confirmación del usuario: cámaras virtuales en OBS - 16-11-2026
+# PRUEBAS - WT MultiCam
+
+Actualizado: 17 de noviembre de 2026. Plan vigente: PLAN.md. Tareas: TODO.md.
+
+## Controles de audio del multiview - 17-11-2026
+
+- Usuario confirma recepción del audio independiente, con retraso al conectar y cortes ocasionales. Solicita aplazar estabilidad/fluidez y continuar con controles. No se considera estable ni sincronizado el audio por esta confirmación.
+- Implementados volumen de salida 0-100 %, silencio y medidor de pico por teléfono. Silencio no detiene AudioRecord; los valores son independientes por ID y sólo se mantienen durante la ejecución del receptor.
+- El medidor muestra pico de salida antes de OBS, refresca cada 150 ms y caduca sin muestras recientes. Se distingue captura activa en Android de audio recibido/conectado en Windows.
+- Implementada orden remota de micrófono con cámara/destinatario, confirmación de grabación real AudioRecord y autorización explícita de la sesión. No concede permisos ni inicia cámara. Detener cámara/salir de Android invalida la autorización.
+- ConnectionChecks --offline: 55 comprobaciones aprobadas. Incluyen extremos PCM, no modificar entrada, dBFS, independencia de fuentes, recuperación de volumen al quitar silencio, caducidad, valores inválidos, compatibilidad con APK antiguo y confirmación/rechazo remoto de micrófono.
+- Windows compila en build/audio-controls-desktop con 0 errores y 0 advertencias. La copia a la salida habitual falló porque el EXE del usuario está abierto; no se cerró su aplicación.
+- Los 16 fuentes Kotlin, incluida MainActivity, compilan contra SDK 36 con dependencias y bindings locales. APK completo NO generado: el wrapper en caché temporal intentó descargar Gradle y falló por DNS services.gradle.org. La compilación aislada no sustituye generar/instalar el APK completo.
+- MultiviewChecks aprobado: selección mantiene volumen/silencio por teléfono, otro teléfono conserva sus propios ajustes y el botón remoto permanece deshabilitado sin capacidades/autorización. Render con dos/cinco cámaras sintéticas en 1400x900 y 1000x720; proporción 80/20 preservada y controles desplazables. Capturas revisadas.
+- Pendiente físico: actualizar ambas aplicaciones, iniciar Android marcando Enviar micrófono, comprobar nivel, volumen y silencio en OBS y detener/reactivar desde PC. Probar dos teléfonos y permisos/cortes durante una orden. No se ejecutaron pruebas de estabilidad o fluidez en esta entrega.
+
+
+## Estado actual y nueva entrega
+
+El usuario confirmó funcionamiento de cámaras virtuales, multiview, zoom y audio previo. Las capturas anteriores muestran Motorola y Xiaomi con dos fuentes de captura en OBS. No se infiere duración, sincronía o toda la matriz de reconexiones de esa confirmación general.
+
+La salida independiente de sólo audio ya fue probada por el usuario: llega sonido a OBS, con retraso inicial y cortes ocasionales. Esa entrega sólo cambió Windows y conservó enlaces anteriores. Los controles remotos añadidos después requieren actualizar también Android; no crean un micrófono virtual del sistema.
+
+## Verificaciones ejecutadas el 17-11-2026
+
+| Comprobación | Resultado | Alcance |
+|---|---|---|
+| Compilación completa Windows | Aprobada, 0 errores y 0 advertencias | Incluye recursos, botón nuevo y proveedor nativo existente. |
+| ConnectionChecks --offline | 43 comprobaciones aprobadas | Incluye rutas/credenciales de audio por teléfono, separación de audio/video y enlaces estables. No prueba sockets. |
+| ObsOutputChecks, imagen | Cuatro comprobaciones aprobadas | Orientación/espejo, JPEG sin recodificar e imagen sin señal. |
+| FFmpeg, Matroska A/V anterior | Aprobado | 25 paquetes de video y 50 PCM, timestamps crecientes. |
+| FFmpeg, Matroska sólo audio | Aprobado | Una pista de audio, ninguna de video, 50 paquetes PCM; tono/silencio y bytes intactos. |
+| ConnectionChecks --obs-audio-output | Bloqueada, NO aprobada | Winsock 10013 al conectar a 127.0.0.1:47780; no se alcanzó la prueba de dos lectores ni reconexión. |
+| Fuente de sólo audio en OBS con teléfonos | Recepción confirmada posteriormente | Usuario reporta retraso inicial y cortes ocasionales; estabilidad pendiente. |
+
+Los 33 checks nativos de la cámara virtual corresponden a la revisión anterior; no se repitieron en esta entrega, que no modifica el proveedor. Los cambios actuales separan lectores de audio/video para evitar codificar imágenes por una fuente sólo audio. El test HTTP preparado debe comprobar este comportamiento en un entorno permitido.
+
+## Próxima sesión física: audio independiente
+
+1. Cerrar y recompilar Windows. Usar el APK actual con micrófono autorizado e iniciar el envío.
+2. Mantener cámara virtual para video; copiar audio OBS y crear Fuente multimedia, Archivo local desmarcado, formato matroska y búfer 0 MB.
+3. Silenciar/retirar la ruta A/V anterior del mismo teléfono y conservar la fuente nueva activa.
+4. Confirmar audio y ausencia de otra imagen; apagar el micrófono y verificar silencio.
+5. Detener/reiniciar y repetir con dos teléfonos: uno debe continuar cuando el otro se apaga o reconecta.
+6. Registrar latencia/sincronía observada sin atribuir al formato una mejora no medida.
+
+## Matriz de próximas pruebas
+
+| Caso | Resultado esperado | Estado |
+|---|---|---|
+| Un teléfono, audio nuevo + cámara virtual | Imagen y sonido por rutas independientes, sin audio duplicado | Pendiente |
+| Dos teléfonos | Fuentes de audio independientes y sin mezclas | Pendiente |
+| Apagar micrófono o perder audio | Silencio sin reproducir paquetes antiguos | Pendiente |
+| Reconectar un teléfono | Recuperar fuente sin cortar el otro | Pendiente |
+| Reiniciar receptor/OBS | Conservar enlaces/identidad, sin duplicados | Pendiente |
+| Sesión 30 minutos, luego 60 | Sin congelamientos ni crecimiento continuo de demora/memoria | Pendiente |
+| Palmada al inicio/final | Medición del desfase y posible deriva por teléfono | Pendiente |
+| Controles de audio | Permisos, nivel, silencio y volumen correctos por teléfono | Implementados y comprobados localmente; prueba física pendiente |
+| Instalador completo | Instalar/actualizar/desinstalar sin dispositivos huérfanos | Aún no implementado |
+
+## Plantilla vigente por sesión
+
+- Fecha/hora y duración:
+- Versiones del receptor/APK y Windows/Android:
+- Teléfono, cámara y perfil (resolución/FPS/formato):
+- Transporte USB/Wi-Fi y otros teléfonos conectados:
+- Ruta de video (cámara virtual) y de audio (nuevo enlace sólo audio / A/V anterior):
+- Formato/búfer de OBS y fuente anterior silenciada/retirada:
+- Micrófono autorizado/activado y cambios durante la sesión:
+
+| Medición | Inicio | Durante | Final |
+|---|---|---|---|
+| FPS enviados / presentados por teléfono | | | |
+| CPU/GPU y memoria del receptor | | | |
+| Temperatura/batería accesible | | | |
+| Desfase audio-video en ms y método | | | |
+| Latencia real y método | | | |
+
+Registrar si audio o video llega primero. Los 60 FPS de composición de OBS no prueban captura a 60 FPS. No incluir credenciales, enlaces completos ni QR activos.
+
+- Resultado: aprobado / fallido / parcial / bloqueado:
+- Pasos y error exacto, si existe:
+- Recuperación independiente y cambios de escena:
+- Próxima acción:
+
+## Historial conservado de revisiones anteriores
+
+Las entradas siguientes se conservan como evidencia de su momento. Sus tareas pendientes, instrucciones de Captura de ventana, ausencia de herramientas o propuestas de 60 FPS son históricas; para trabajo nuevo usar PLAN/TODO y las secciones actuales de este archivo.
+
+### Confirmación del usuario: cámaras virtuales en OBS - 16-11-2026
 
 - Usuario confirma que la activación ahora funciona después de la corrección de 0xC00D3E85.
 - Capturas: multiview con Motorola moto e30 y Xiaomi 25080RABDG vinculados, ambas miniaturas con imagen; Xiaomi muestra 1920x1080 y 27 FPS en pantalla. OBS muestra dos fuentes de Dispositivo de captura de video e imágenes distintas simultáneas en la vista previa. Esto confirma el uso real básico; no certifica 30 FPS sostenidos ni estabilidad prolongada.
 - La cifra 60 FPS de la barra de OBS es la frecuencia de su composición; no demuestra captura a 60 FPS desde los teléfonos. La función de 60 FPS continúa aplazada.
 - Audio recibido correctamente confirmado en la conversación anterior; en esta captura Xiaomi indica micrófono apagado. No se infiere sincronía A/V de una imagen.
 - Siguiente validación: mantener dos cámaras durante 30 minutos, desconectar/reconectar una sin interrumpir la otra, reiniciar receptor/OBS conservando las fuentes y medir latencia/sincronía con palmada o estímulo común. Anotar USB/Wi-Fi y FPS por teléfono.
-## Corrección de activación 0xC00D3E85 - 16-11-2026
+### Corrección de activación 0xC00D3E85 - 16-11-2026
 
 - Usuario reporta COMException MF_E_SHUTDOWN al iniciar el dispositivo virtual desde WT_StartCamera.
 - Regresión local reproducida antes de modificar el proveedor: activar una fuente, conservar IMFMediaSource y liberar IMFActivate hacía que GetCharacteristics devolviera exactamente 0xC00D3E85. El destructor del activador llamaba a ShutdownObject y cerraba prematuramente la fuente ajena.
@@ -14,7 +103,7 @@
 - Compilación completa WPF/C++ aprobada, 0 errores y 0 advertencias. Hash de DLL en Native coincide con el proveedor compilado.
 - WT_StartCameraEx informa etapa de fallo (COM, plataforma MF, creación o inicio del dispositivo). El mensaje administrado conserva el código HRESULT sin depender de información de error COM residual.
 - Falta confirmar la activación real reportada por el usuario. Cerrar receptor/OBS, recompilar Windows y volver a Activar cámara virtual autorizando el registro de la nueva DLL. No cambia Android y no se han alterado dispositivos del usuario desde las herramientas.
-## Cámara virtual implementada - 16-11-2026
+### Cámara virtual implementada - 16-11-2026
 
 - Proveedor nativo COM x64 con fábrica IMFActivate, origen IMFMediaSourceEx y flujo IMFMediaStream2. Puente de último cuadro BGR32 a NV12 1920x1080/30, ajuste proporcional y marcas de tiempo crecientes.
 - Administrador WPF y botones Activar/Desactivar por teléfono. Identidad por SID+UUID; nombre original persistido. Recuperación sin elevación automática, retirada del dispositivo y cierre del publicador desde MTA.
@@ -25,16 +114,16 @@
 - CheckVirtualCamera.ps1: herramientas y API disponibles; fuente y DLL presentes. Detecta Visual Studio Insiders. No registra dispositivos.
 - Pendiente: activar desde la aplicación, comprobar lectura real desde Camera Frame Server y enumeración/imagen en OBS, dos teléfonos físicos y latencia/sincronía comparadas. El audio sigue por la Fuente multimedia Matroska; conservarla activa debajo de la cámara virtual. No se creó micrófono virtual.
 - Android no cambia en esta revisión. Instrucciones: docs/CAMARA_VIRTUAL.md.
-## Confirmación de audio y herramientas nativas - 16-11-2026
+### Confirmación de audio y herramientas nativas - 16-11-2026
 
 - Usuario confirma que recibe correctamente el audio y que el resto del funcionamiento actual va bien. No se ha medido aún latencia ni sincronía con instrumentación.
 - Instalados MSVC x64 14.52.37025 (Visual Studio 18 Insiders) y Windows SDK 10.0.26100.0; cabecera mfvirtualcamera.h disponible.
 - Prueba real mínima C++ compilada, enlazada con mfsensorgroup.lib y ejecutada con salida 0. Comprueba herramientas y referencia a MFCreateVirtualCamera; no crea una cámara ni prueba un proveedor Media Foundation.
 - Detector actualizado para incluir instalaciones prerelease y búsqueda de compilador cuando vswhere no devuelve instalaciones.
 - Siguiente desarrollo: proveedor COM Media Foundation, puente de cuadros y administración de dispositivos independientes por teléfono. Aún no hay cámaras virtuales registradas.
-# Registro de pruebas — WT MultiCam
+## Registro de pruebas — WT MultiCam
 
-## Audio opcional, latencia y ruta virtual — 16-11-2026
+### Audio opcional, latencia y ruta virtual — 16-11-2026
 
 - Usuario confirma multiview y zoom, y recepción en OBS con demora. Solicita audio del teléfono y propone usar dispositivos de captura mediante cámaras virtuales.
 - Micrófono opcional en Android, permiso RECORD_AUDIO, PCM mono 48 kHz y transporte TLS añadido. Audio se detiene junto a captura y al salir al fondo. Receptor valida longitud de 1920 bytes/timestamps y muestra estado.
@@ -46,7 +135,7 @@
 - CheckVirtualCamera.ps1: build 26200/x64, exportación MFCreateVirtualCamera disponible; mfvirtualcamera.h y MSVC x64 no encontrados. Proveedor nativo aún no implementado; ningún dispositivo/driver/registro creado. Requiere herramientas C++/Windows SDK y desarrollo del proveedor/puente/instalación real.
 - Próximo paso: preparar herramientas nativas para cámaras virtuales. Para probar audio/latencia de la salida intermedia, actualizar ambas apps, optar por micrófono y usar enlace nuevo en OBS con formato matroska/búfer 0 MB. Medir con palmada y comprobar permisos, apagado, reconexiones y dos teléfonos.
 
-## Multiview 80/20 y zoom continuo — 16-11-2026
+### Multiview 80/20 y zoom continuo — 16-11-2026
 
 - Receptor Windows compilado sin errores ni advertencias. Render y comprobación de proporción 4:1 aprobados con dos y cinco cámaras sintéticas, en 1400×900 y 1000×720; capturas revisadas. Miniaturas compactas sin estiramiento y barra horizontal cuando no caben.
 
@@ -56,7 +145,7 @@
 - ConnectionChecks --offline: 35 comprobaciones aprobadas; cuatro nuevas verifican exclusión de envíos simultáneos, sustitución de valores intermedios, descarte al cambiar cámara y liberación tras un error.
 - Esta revisión no cambia el protocolo Android; basta actualizar Windows cuando el APK de controles remotos ya está instalado. Fluidez real del zoom por USB/Wi-Fi y valor final al soltar todavía pendientes de prueba del usuario.
 
-## Multiview y canal de control — 16-11-2026
+### Multiview y canal de control — 16-11-2026
 
 - WPF compila sin errores ni advertencias con la nueva ventana Multiview y su botón en la barra lateral.
 - ConnectionChecks --offline: 31 comprobaciones aprobadas. Las seis nuevas comprueban cámara/operación/valor, rechazo de confirmación de otro teléfono, ausencia de éxito anticipado, confirmación correcta, rechazo del hardware y valores no finitos.
@@ -65,7 +154,7 @@
 - Ajustes incluidos: zoom nativo/recorte según soporte, compensación AE, autofocus y flash continuo. Se aplican en el hilo Camera2 y responden por el canal TLS existente; no hay captura de ventana en la ruta OBS.
 - Pendiente: APK Gradle completo y prueba física de zoom/exposición/enfoque/linterna en USB/Wi-Fi y dos teléfonos. Las pruebas locales no certifican que cada fabricante acepte todos los controles ni miden latencia de control real.
 
-## Salida directa OBS y retirada de 60 FPS — 16-11-2026
+### Salida directa OBS y retirada de 60 FPS — 16-11-2026
 
 - Android: retirados perfiles 60 FPS normales y de alta velocidad, retirada creación de sesión restringida y añadida comprobación máxima de 30 al abrir cámara. Perfiles guardados de 60 no coinciden con la lista y vuelven a una opción disponible. Se conserva icono y persistencia.
 - Windows: salida HTTP MJPEG exclusivamente loopback, independiente por UUID, botón Copiar enlace OBS y tarjeta Directa local. OBS consume una Fuente multimedia por teléfono; la salida no lee ventanas ni depende del render WPF.
@@ -76,14 +165,14 @@
 - ConnectionChecks --obs-output: NO aprobado en este entorno. HTTP a 127.0.0.1:47780 bloqueado por Winsock 10013 (socket no permitido). No se pudo ejecutar la validación HTTP de dos fuentes, ni se afirma compatibilidad real en OBS hasta probarla en el equipo del usuario.
 - Próxima acción: cerrar el receptor anterior, recompilar Windows y Android; iniciar teléfono a 1080p30; copiar enlace en Fuente multimedia de OBS, Archivo local desmarcado y Formato de entrada mpjpeg. Comprobar imagen y minimizar receptor, después reinicios y dos teléfonos.
 
-## Alta velocidad aplazada — 16-11-2026
+### Alta velocidad aplazada — 16-11-2026
 
 - Usuario probó 60 FPS: `No se pudo preparar cámara: Surface size 1202x2005 is not part of the high speed supported size list [1280x720, 1920x1080]`.
 - La sesión detectó una superficie con dimensiones del visor en vez de un tamaño permitido. No se considera validado el modo de alta velocidad.
 - Por instrucción del usuario se retira el modo: selector limitado a 15/24/30, sin crear sesiones restringidas de alta velocidad. Perfil guardado de 60 vuelve a una opción disponible de hasta 30.
 - Nueva prioridad explícita: integración directa con OBS; no usar Captura de ventana como salida final.
 
-## Alta velocidad y persistencia — 16-11-2026
+### Alta velocidad y persistencia — 16-11-2026
 
 - Diagnóstico del usuario: Xiaomi 25080RABDG, Android 16, trasera 0. Normal: máximo 30 FPS y duración 1080p de 33 333 333 ns tanto para encoder como visor. Encoders MTK admiten 1080p60. Alta velocidad anunciada: [30,120] / [120,120].
 - Se implementa el perfil H.264 60 con sensor 120 y limitación Surface a 60 antes de codificar; icono de marca y vínculos/perfiles persistentes. Ver `docs/ALTA_VELOCIDAD_Y_RECONEXION.md`.
@@ -93,14 +182,14 @@
 - Recursos Android compilados mediante aapt2. Pruebas de reglas de perfiles/pacing aprobadas, incluyendo elección de rango fijo 120 y rechazo de rangos variables solos.
 - Pendiente: APK completo y pruebas reales de alta velocidad, reconexión, perfil persistido e icono en el launcher. No se ha confirmado 60 FPS sostenido ni se ha instalado esta revisión en el teléfono desde este entorno.
 
-## Rendimiento reportado — 16-11-2026
+### Rendimiento reportado — 16-11-2026
 
 - Usuario informa unos 29 FPS enviados en Android y 26–29 FPS presentados en Windows, tanto por USB como por Wi-Fi. No se especificaron resolución, formato, duración ni modelo.
 - Selector sólo ofrece hasta 30 FPS aunque la cámara del fabricante admite 1920×1080/60 según el usuario.
 - Se añade botón «Diagnóstico de 60 FPS» con modelo/Android, cámara, rangos AE normales, duración mínima de captura/visor 1080p, codecs AVC y rangos de alta velocidad si existen. Permite copiar el informe sin datos de conexión.
 - No se habilita 60 FPS sin conocer qué filtro falla. Pendiente compilar el APK actualizado y obtener el informe de la cámara seleccionada. La nueva interfaz y consulta no han sido validadas en teléfono.
 
-## Reinicio en vertical — 16-11-2026
+### Reinicio en vertical — 16-11-2026
 
 - Confirmación posterior del usuario: «Ahora si esta arreglado». Se considera resuelta la distorsión reportada al detener/reiniciar en vertical por USB. No se informaron modelo, perfil, FPS ni duración; esta confirmación no valida rendimiento, Wi-Fi ni toda la matriz de cámaras.
 
@@ -109,7 +198,7 @@
 - Pendiente físico: iniciar en vertical, detener y reiniciar cinco veces; repetir tras giro horizontal/vertical y con ambas cámaras. Comprobar proporciones tanto en el teléfono como en Windows, con H.264 y JPEG. Registrar perfil y pantalla afectada si persiste.
 - No se considera validado el arreglo hasta repetir el caso en el teléfono.
 
-## Sesión 16-11-2026 — revisión en XAMPP
+### Sesión 16-11-2026 — revisión en XAMPP
 
 - Ubicación actual: `C:\xampp\htdocs\Movil_camara`.
 - Protocolo: `dotnet run --project tools/ConnectionChecks/ConnectionChecks.csproj --disable-build-servers -- --offline` aprobado (16 comprobaciones). No valida sockets ni teléfono.
@@ -119,7 +208,7 @@
 - ADB: no pudo iniciar/comunicarse con el servidor local. No se pudo determinar si hay un teléfono conectado; no se instaló ni modificó ningún dispositivo.
 - Para .NET se desactivó telemetría y se usó `DOTNET_CLI_HOME` temporal para evitar el registro y la carpeta de usuario restringidos. No se modificó la configuración global del equipo.
 
-### Próxima acción fuera de este entorno restringido
+#### Próxima acción fuera de este entorno restringido
 
 1. Abrir Android Studio en la raíz; usar su JDK integrado válido y compilar `:app:assembleDebug`.
 2. Compilar `Escritorio/MovilCamara/MovilCamara.sln` en Visual Studio con acceso a NuGet. El mapeo local de QRCoder ya está incluido.
@@ -132,7 +221,7 @@ No hay aún una validación física documentada de la última versión H.264/sel
 
 Copiar esta plantilla por cada combinación. No guardar tokens, secretos de sesión ni un QR activo.
 
-## Plantilla de sesión
+### Plantilla de sesión
 
 - Fecha/hora:
 - Versión o commit del receptor:
@@ -159,7 +248,7 @@ Copiar esta plantilla por cada combinación. No guardar tokens, secretos de sesi
 | Batería / temperatura accesible | | | |
 | Latencia medida y método | | | |
 
-### Comprobaciones
+#### Comprobaciones
 
 - [ ] Imagen correcta en el teléfono.
 - [ ] Imagen correcta en Windows.
@@ -172,7 +261,7 @@ Copiar esta plantilla por cada combinación. No guardar tokens, secretos de sesi
 - [ ] OBS recibe esa ventana.
 - [ ] Otro dispositivo continúa si se desconecta éste.
 
-### Resultado
+#### Resultado
 
 - Aprobado / fallido / parcial:
 - Error exacto y en qué pantalla aparece:
@@ -181,7 +270,7 @@ Copiar esta plantilla por cada combinación. No guardar tokens, secretos de sesi
 - Captura o log sin credenciales:
 - Próxima acción concreta:
 
-## Historial documentado
+### Historial documentado
 
 | Fecha | Alcance | Resultado |
 |---|---|---|

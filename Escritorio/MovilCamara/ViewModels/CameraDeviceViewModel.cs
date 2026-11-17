@@ -14,7 +14,7 @@ public sealed class CameraDeviceViewModel : INotifyPropertyChanged
     public string VirtualCameraAction => virtualCameraActive ? "Desactivar cámara virtual" : "Activar cámara virtual";
     private string name = "", address = "", status = "", videoStatus = "Empareja por QR para enviar video";
     private bool paired;
-    private string audioStatus = "Micrófono apagado";
+    private string audioStatus = "Sin audio recibido";
     public string AudioStatus { get => audioStatus; set { if (audioStatus == value) return; audioStatus = value; Changed(); } }
     public bool HasBeenPaired { get; private set; }
     public int RotationOffset { get; set; }

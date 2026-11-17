@@ -21,6 +21,8 @@ public partial class MultiViewWindow : Window
     private readonly ObservableCollection<CameraDeviceViewModel> devices;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer zoomTimer = new() { Interval = TimeSpan.FromMilliseconds(80) };
+    private readonly DispatcherTimer audioTimer = new() { Interval = TimeSpan.FromMilliseconds(150) };
+    private bool syncingAudio;
     private sealed record ZoomUpdate(string DeviceId, string Name, string CameraId, long Selection, double Value);
     private readonly LatestValueDispatcher<ZoomUpdate> liveZoom = new();
     private long selectionVersion;
@@ -43,8 +45,10 @@ public partial class MultiViewWindow : Window
         timer.Start();
         zoomTimer.Tick += async (_, _) => await FlushZoom();
         zoomTimer.Start();
+        audioTimer.Tick += (_, _) => RefreshAudio();
+        audioTimer.Start();
         Loaded += (_, _) => RefreshCameras();
-        Closed += (_, _) => { closed = true; selectionVersion++; liveZoom.Clear(); zoomTimer.Stop(); timer.Stop(); hub.Changed -= DevicesChanged; };
+        Closed += (_, _) => { closed = true; selectionVersion++; liveZoom.Clear(); audioTimer.Stop(); zoomTimer.Stop(); timer.Stop(); hub.Changed -= DevicesChanged; };
     }
     private void DevicesChanged() => Dispatcher.BeginInvoke(() => { if (!closed) RefreshCameras(); });
     private void RefreshCameras()
@@ -76,6 +80,7 @@ public partial class MultiViewWindow : Window
         ControlsPanel.IsEnabled = !busy && camera?.IsPaired == true && caps?.Active == true;
         RemoteStatus.Text = camera == null ? "No hay cámaras vinculadas" : caps == null ? "Esperando controles de Android actualizado" :
             caps.Active && camera.IsPaired ? "Conectado · ajustes disponibles" : "Cámara detenida o desconectada";
+        RefreshAudio();
         if (caps == null) return;
         if (lastId == camera!.Id && lastControls != null && lastControls.CameraId != caps.CameraId)
         { selectionVersion++; liveZoom.Clear(); zoomDirty = false; lastZoomInput = DateTime.MinValue; }
@@ -115,7 +120,7 @@ public partial class MultiViewWindow : Window
         CommandStatus.Text = $"Enviando ajuste a {camera.Name}…";
         try
         {
-            var result = await hub.SendCameraCommandAsync(camera.Id, operation, value);
+            var result = await hub.SendCameraCommandAsync(camera.Id, operation, value, hub.GetCameraControls(camera.Id)?.CameraId);
             if (!closed) CommandStatus.Text = result.Ok ? $"{camera.Name}: ajuste confirmado por Android." : $"{camera.Name}: {result.Message}";
         }
         catch (Exception ex) when (ex is OperationCanceledException or ArgumentException)
@@ -159,5 +164,45 @@ public partial class MultiViewWindow : Window
     {
         if (CameraTiles.SelectedItem is CameraDeviceViewModel camera && hub.GetCameraControls(camera.Id) is { } caps)
             await Send("torch", caps.Torch ? 0 : 1);
+    }
+    private void RefreshAudio()
+    {
+        if (closed || AudioPanel == null) return;
+        var camera = CameraTiles.SelectedItem as CameraDeviceViewModel;
+        AudioPanel.IsEnabled = camera != null;
+        if (camera == null)
+        { AudioMeter.Value = 0; AudioLevelLabel.Text = "Sin señal · nivel de salida"; MicrophoneState.Text = "Selecciona un teléfono"; return; }
+        var mix = hub.AudioMixer.Get(camera.Id);
+        var caps = hub.GetCameraControls(camera.Id);
+        syncingAudio = true;
+        try { AudioVolume.Value = mix.Volume * 100; AudioMute.IsChecked = mix.Muted; }
+        finally { syncingAudio = false; }
+        AudioVolumeLabel.Text = $"Volumen de salida: {mix.Volume * 100:F0} %";
+        AudioMeter.Value = double.IsNegativeInfinity(mix.OutputDb) ? 0 : Math.Clamp((mix.OutputDb + 60) / 60 * 100, 0, 100);
+        AudioLevelLabel.Text = (mix.Muted ? "Silenciado" : mix.Fresh ?
+            (double.IsNegativeInfinity(mix.OutputDb) ? "−∞ dBFS" : $"{mix.OutputDb:F1} dBFS") : "Sin muestras recientes") + " · nivel de salida";
+        MicrophoneState.Text = caps?.MicrophoneActive == true ? "Captura activa en Android" :
+            hub.IsAudioActive(camera.Id) ? "Audio conectado" : "Micrófono detenido o sin conexión";
+        MicrophoneToggle.Content = caps?.MicrophoneActive == true ? "Detener micrófono" : "Activar micrófono";
+        MicrophoneToggle.IsEnabled = !busy && !liveZoom.IsBusy && camera.IsPaired && caps?.Active == true &&
+            caps.AudioControlSupported && (caps.MicrophoneActive || caps.MicrophoneAllowed);
+        AudioHelp.Text = caps?.AudioControlSupported != true ? "Actualiza Android para activar o detener el micrófono desde el PC. Volumen y silencio controlan la salida, sin detener la captura." :
+            !caps.MicrophoneAllowed ? "Para autorizar el micrófono, marca Enviar micrófono en Android y vuelve a iniciar la cámara. Silenciar no detiene la captura." :
+            "Volumen y silencio afectan al audio de este teléfono en OBS. Detener micrófono cierra la captura en Android. El medidor muestra el pico de salida antes del volumen de OBS.";
+    }
+    private void AudioVolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (syncingAudio || hub == null || CameraTiles?.SelectedItem is not CameraDeviceViewModel camera) return;
+        hub.AudioMixer.SetVolume(camera.Id, Math.Clamp(e.NewValue / 100, 0, 1)); RefreshAudio();
+    }
+    private void AudioMuteChanged(object sender, RoutedEventArgs e)
+    {
+        if (syncingAudio || hub == null || CameraTiles?.SelectedItem is not CameraDeviceViewModel camera) return;
+        hub.AudioMixer.SetMuted(camera.Id, AudioMute.IsChecked == true); RefreshAudio();
+    }
+    private async void ToggleMicrophone(object sender, RoutedEventArgs e)
+    {
+        if (CameraTiles.SelectedItem is CameraDeviceViewModel camera && hub.GetCameraControls(camera.Id) is { } caps)
+            await Send("microphone", caps.MicrophoneActive ? 0 : 1);
     }
 }

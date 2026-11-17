@@ -1,5 +1,9 @@
 # Multiview y controles remotos — 16-11-2026
 
+## Actualización: audio por teléfono - 17-11-2026
+
+Se añadieron medidor, volumen, silencio de salida y activación/detención remota del micrófono. El diseño 80/20 se conserva. Para el botón remoto actualizar Android y Windows, y autorizar el micrófono al iniciar la captura. Ver [controles de audio](CONTROLES_AUDIO_MULTIVIEW.md). Los párrafos históricos siguientes sobre ausencia de audio o actualización sólo Windows quedan sustituidos por esta actualización.
+
 ## Revisión vigente: vista 80/20 y zoom continuo
 
 La vista principal ocupa aproximadamente el 80 % del área de video; el 20 % restante se reserva a una franja horizontal de miniaturas compactas. No se estiran las tarjetas para llenar el alto. Si no caben todas, se desplaza la franja horizontalmente. La selección, el estado y las fuentes OBS permanecen independientes.

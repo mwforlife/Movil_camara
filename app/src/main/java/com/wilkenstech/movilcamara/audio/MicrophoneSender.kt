@@ -15,6 +15,7 @@ import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.CompletableFuture
 import javax.net.ssl.SSLSocket
 
 /** Opt-in microphone; 20 ms PCM packets over the existing authenticated, pinned TLS receiver. */
@@ -25,6 +26,9 @@ class MicrophoneSender(private val context: Context, private val endpoint: () ->
     private val transport = Executors.newSingleThreadExecutor()
     private val watchdog = Executors.newSingleThreadScheduledExecutor()
     private val generation = AtomicInteger()
+    private val recordingRun = AtomicInteger(-1)
+    @Volatile private var startCompletion: CompletableFuture<Unit>? = null
+    val isRecording: Boolean get() = active && recordingRun.get() == generation.get()
     @Volatile private var active = false
     @Volatile private var recorder: AudioRecord? = null
     @Volatile private var socket: SSLSocket? = null
@@ -35,9 +39,11 @@ class MicrophoneSender(private val context: Context, private val endpoint: () ->
                 try { socket?.close() } catch (_: Exception) { }
         }, 500, 500, TimeUnit.MILLISECONDS)
     }
-    fun start() {
-        if (active) return
+    fun start(): CompletableFuture<Unit> {
+        if (active) return startCompletion ?: CompletableFuture.completedFuture(Unit)
         require(context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) { "Falta permiso de micrófono" }
+        val started = CompletableFuture<Unit>()
+        startCompletion = started
         val run = generation.incrementAndGet()
         active = true; queue.clear()
         capture.execute {
@@ -53,6 +59,9 @@ class MicrophoneSender(private val context: Context, private val endpoint: () ->
                 if (!active || generation.get() != run) return@execute
                 recorder = local; local.startRecording()
                 check(local.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "No se pudo iniciar el micrófono" }
+                if (!active || generation.get() != run) return@execute
+                recordingRun.set(run)
+                started.complete(Unit)
                 while (active && generation.get() == run) {
                     val bytes = ByteArray(1920)
                     var offset = 0
@@ -67,8 +76,10 @@ class MicrophoneSender(private val context: Context, private val endpoint: () ->
                     }
                 }
             } catch (ex: Exception) {
+                started.completeExceptionally(ex)
                 if (active && generation.get() == run) { active = false; status("Micrófono: " + ex.localizedMessage); try { socket?.close() } catch (_: Exception) { } }
             } finally {
+                if (!started.isDone) started.completeExceptionally(java.io.IOException("Inicio de micrófono cancelado"))
                 try { local?.stop() } catch (_: Exception) { }
                 local?.release()
                 if (generation.get() == run) recorder = null
@@ -119,9 +130,11 @@ class MicrophoneSender(private val context: Context, private val endpoint: () ->
                 } finally { socket = null; writingSince = 0 }
             }
         }
+        return started
     }
     fun stop() {
         active = false; generation.incrementAndGet(); queue.clear()
+        startCompletion?.completeExceptionally(java.io.IOException("Micrófono detenido"))
         try { recorder?.stop() } catch (_: Exception) { }
         try { socket?.close() } catch (_: Exception) { }
         status("Micrófono apagado")

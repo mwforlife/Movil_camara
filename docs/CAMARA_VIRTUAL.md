@@ -22,6 +22,8 @@ El formato virtual inicial es fijo: 1080p30. La captura Android conserva su perf
 
 ## Micrófono
 
+**Actualización 17-11-2026:** ya está implementado **Copiar audio OBS**, una fuente Matroska de sólo sonido para usar junto al dispositivo virtual. Consultar [audio independiente](AUDIO_INDEPENDIENTE.md). Falta confirmar esta fuente nueva en OBS. El procedimiento de conservar la fuente A/V descrito debajo sigue siendo compatible, pero al cambiar al enlace nuevo conviene silenciar o retirar la ruta A/V anterior para evitar duplicados.
+
 La cámara virtual entrega video, no crea un micrófono Windows. Para conservar el audio ya probado, mantener activa la Fuente multimedia Matroska del teléfono **debajo** de la cámara virtual en el orden de fuentes de OBS, de modo que su imagen quede cubierta. No desactivar esa fuente con el ojo si ello detiene su audio. Elegir sólo una ruta de video visible y comprobar sincronía; el desfase de audio puede necesitar ajuste en OBS tras medirlo.
 
 ## Persistencia y desconexiones

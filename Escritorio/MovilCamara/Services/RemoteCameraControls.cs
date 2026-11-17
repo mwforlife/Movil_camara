@@ -4,7 +4,8 @@ using System.Threading.Channels;
 namespace MovilCamara.Services;
 
 public sealed record CameraControls(string CameraId, bool Active, double MinZoom, double MaxZoom, double Zoom,
-    bool TorchSupported, bool Torch, int MinExposure, int MaxExposure, int Exposure, bool FocusSupported);
+    bool TorchSupported, bool Torch, int MinExposure, int MaxExposure, int Exposure, bool FocusSupported,
+    bool AudioControlSupported = false, bool MicrophoneAllowed = false, bool MicrophoneActive = false);
 public sealed record CameraCommand(string Id, string CameraId, string Operation, double Value, DateTime Expires);
 public sealed record CameraCommandResult(bool Ok, string Message);
 
@@ -16,7 +17,8 @@ public sealed class RemoteCameraControls
     private Channel<CameraCommand> Queue(string deviceId) => queues.GetOrAdd(deviceId, _ => Channel.CreateBounded<CameraCommand>(8));
     public async Task<CameraCommandResult> SendAsync(string deviceId, string cameraId, string operation, double value, CancellationToken ct = default)
     {
-        if (operation is not ("zoom" or "torch" or "exposure" or "autofocus") || !double.IsFinite(value))
+        if (operation is not ("zoom" or "torch" or "exposure" or "autofocus" or "microphone") || !double.IsFinite(value) ||
+            (operation == "microphone" && value is not (0 or 1)))
             throw new ArgumentException("Control no permitido");
         var command = new CameraCommand(Guid.NewGuid().ToString("N"), cameraId, operation, value, DateTime.UtcNow.AddSeconds(12));
         var completion = new TaskCompletionSource<CameraCommandResult>(TaskCreationOptions.RunContinuationsAsynchronously);

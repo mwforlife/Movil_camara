@@ -142,6 +142,7 @@
           <TextBlock Text="{Binding AudioStatus}" Foreground="#75C4FA" Margin="0,0,0,8"/>
           <TextBlock Text="{Binding VirtualCameraStatus}" Foreground="#83C8FF" Margin="0,0,0,8" TextWrapping="Wrap"/>
           <WrapPanel>
+           <Button Content="Copiar audio OBS" Tag="{Binding Id}" Click="CopyObsAudioLink_Click" Padding="12,8" Margin="0,0,8,6" ToolTip="Enlace de sólo audio para usar junto a la cámara virtual"/>
            <Button Content="{Binding VirtualCameraAction}" Tag="{Binding Id}" Click="VirtualCamera_Click" Padding="12,8" Margin="0,0,8,6"/>
            <Button Content="Copiar enlace OBS" Tag="{Binding Id}" Click="CopyObsLink_Click" Padding="12,8" Margin="0,0,8,6"/>
            <Button Content="Emparejar por QR" IsEnabled="{Binding CanConnect}" Click="AddPhone_Click" Padding="12,8" Background="#203653" Margin="0,0,0,6"/>

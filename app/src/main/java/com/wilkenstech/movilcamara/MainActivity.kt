@@ -33,6 +33,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var camera: CameraController
     private lateinit var sender: VideoSender
     private lateinit var microphone: com.wilkenstech.movilcamara.audio.MicrophoneSender
+    @Volatile private var remoteMicrophoneAllowed = false
+    private var captureEpoch = 0L
+    private var microphoneCommandEpoch = 0L
     private val qualityPrefs by lazy { getSharedPreferences("camera_settings", MODE_PRIVATE) }
     private var qualityContext = "local"
     private fun profileKey(profile: CaptureProfile) = "${profile.width}x${profile.height}:${profile.fps}:${profile.codec}:${profile.fps}"
@@ -153,14 +156,23 @@ class MainActivity : AppCompatActivity() {
             { error -> runOnUiThread {
                 if (!isDestroyed) {
                     sender.stop()
+                    remoteMicrophoneAllowed = false
+                    captureEpoch++
                     microphone.stop()
                     binding.cameraPanel.captureStatus.text = error
                     binding.cameraPanel.videoStatus.text = getString(R.string.video_stopped)
                 }
             } }, jpegQuality = { sender.jpegQuality })
         sender.requestKeyFrame = camera::requestKeyFrame
-        connection.controlsProvider = camera::remoteControls
-        connection.controlHandler = camera::applyRemoteControl
+        connection.controlsProvider = {
+            camera.remoteControls().put("audioControlSupported", true)
+                .put("microphoneAllowed", remoteMicrophoneAllowed && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+                .put("microphoneActive", microphone.isRecording)
+        }
+        connection.controlHandler = { command ->
+            if (command.optString("operation") == "microphone") applyRemoteMicrophone(command)
+            else camera.applyRemoteControl(command)
+        }
         binding.cameraChoice.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 (binding.cameraChoice.selectedItem as? CameraChoice)?.let { loadProfiles(it) }
@@ -230,6 +242,9 @@ class MainActivity : AppCompatActivity() {
         qualityPrefs.edit().putString("$qualityContext:camera", profile.cameraId)
             .putString("$qualityContext:${profile.cameraId}:profile", profileKey(profile)).apply()
         binding.connectionScreen.visibility = View.GONE
+        captureEpoch++
+        remoteMicrophoneAllowed = binding.sendMicrophone.isChecked &&
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         binding.cameraPanel.root.visibility = View.VISIBLE
         binding.root.keepScreenOn = true
         binding.cameraPanel.captureStatus.setText(R.string.camera_preparing)
@@ -280,6 +295,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopCamera() {
+        captureEpoch++
+        remoteMicrophoneAllowed = false
         microphone.stop()
         binding.cameraPanel.wifiPreview.stop()
         camera.stop()
@@ -287,6 +304,54 @@ class MainActivity : AppCompatActivity() {
         binding.root.keepScreenOn = false
         binding.cameraPanel.root.visibility = View.GONE
         binding.connectionScreen.visibility = View.VISIBLE
+    }
+
+    private fun applyRemoteMicrophone(command: org.json.JSONObject): org.json.JSONObject {
+        val result = java.util.concurrent.CompletableFuture<org.json.JSONObject>()
+        runOnUiThread {
+            if (result.isDone) return@runOnUiThread
+            val state = camera.remoteControls()
+            val value = command.optDouble("value", Double.NaN)
+            if (isDestroyed || isFinishing || !lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) ||
+                !connection.isPaired || !state.optBoolean("active") || state.optString("cameraId") != command.optString("cameraId") ||
+                (value != 0.0 && value != 1.0)) {
+                result.complete(org.json.JSONObject().put("ok", false).put("message", "La cámara o sesión cambió; inicia el envío en Android"))
+            } else if (value == 0.0) {
+                microphoneCommandEpoch++
+                microphone.stop()
+                binding.sendMicrophone.isChecked = false
+                result.complete(org.json.JSONObject().put("ok", true).put("message", "Captura de micrófono detenida"))
+            } else if (!remoteMicrophoneAllowed || checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                result.complete(org.json.JSONObject().put("ok", false).put("message", "Autoriza Enviar micrófono al iniciar la cámara en Android"))
+            } else {
+                val epoch = captureEpoch
+                val commandEpoch = ++microphoneCommandEpoch
+                try {
+                    microphone.start().whenComplete { _, error ->
+                        runOnUiThread {
+                            if (captureEpoch != epoch || microphoneCommandEpoch != commandEpoch || isDestroyed) {
+                                result.complete(org.json.JSONObject().put("ok", false).put("message", "La sesión cambió"))
+                            } else if (result.isCancelled) {
+                                microphone.stop()
+                            } else {
+                                val ok = error == null && microphone.isRecording && connection.isPaired
+                                if (!ok) microphone.stop()
+                                binding.sendMicrophone.isChecked = ok
+                                result.complete(org.json.JSONObject().put("ok", ok).put("message",
+                                    if (ok) "Captura de micrófono activa" else "No se pudo abrir el micrófono"))
+                            }
+                        }
+                    }
+                } catch (ex: Exception) {
+                    result.complete(org.json.JSONObject().put("ok", false).put("message", ex.localizedMessage ?: "Error de micrófono"))
+                }
+            }
+        }
+        return try { result.get(5, java.util.concurrent.TimeUnit.SECONDS) }
+        catch (_: Exception) {
+            result.cancel(false)
+            org.json.JSONObject().put("ok", false).put("message", "Android no pudo confirmar el micrófono a tiempo")
+        }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {

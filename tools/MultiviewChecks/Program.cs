@@ -45,6 +45,17 @@ internal static class Program
         tiles.SelectedItem = devices[2];
         window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
         if (!ReferenceEquals(tiles.SelectedItem, devices[2])) throw new Exception("Se perdió la cámara seleccionada al actualizar");
+        var volume = (Slider)window.FindName("AudioVolume");
+        var mute = (CheckBox)window.FindName("AudioMute");
+        volume.Value = 35; mute.IsChecked = true;
+        if (hub.AudioMixer.Get(devices[2].Id).Volume != .35 || !hub.AudioMixer.Get(devices[2].Id).Muted)
+            throw new Exception("Los controles de audio no afectan al teléfono seleccionado");
+        tiles.SelectedItem = devices[0];
+        if (volume.Value != 100 || mute.IsChecked == true) throw new Exception("El audio de otra cámara heredó los ajustes ajenos");
+        tiles.SelectedItem = devices[2];
+        if (volume.Value != 35 || mute.IsChecked != true) throw new Exception("Cambiar selección pierde ajustes de audio");
+        if (((Button)window.FindName("MicrophoneToggle")).IsEnabled) throw new Exception("Micrófono remoto habilitado sin capacidades/permiso Android");
+        Console.WriteLine("PASS: audio por teléfono, selección conserva ajustes y captura remota deshabilitada sin autorización.");
         var output = args.Length > 0 ? args[0] : Path.Combine(Path.GetTempPath(), "wt-multiview-preview");
         Directory.CreateDirectory(output);
         foreach (var cameraTotal in new[] { 5, 2 })

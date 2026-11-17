@@ -10,6 +10,7 @@
   <Compile Include="../../Escritorio/MovilCamara/Services/RemoteCameraControls.cs" Link="RemoteCameraControls.cs"/>
   <Compile Include="../../Escritorio/MovilCamara/Services/LatestValueDispatcher.cs" Link="LatestValueDispatcher.cs"/>
   <Compile Include="../../Escritorio/MovilCamara/Services/AudioWireProtocol.cs" Link="AudioWireProtocol.cs"/>
+  <Compile Include="../../Escritorio/MovilCamara/Services/AudioMixer.cs" Link="AudioMixer.cs"/>
   <Compile Include="../../Escritorio/MovilCamara/Services/LiveMatroska.cs" Link="LiveMatroska.cs"/>
   <Compile Include="../../Escritorio/MovilCamara/Services/UsbConnector.cs" Link="UsbConnector.cs"/>
   <Compile Include="../../Escritorio/MovilCamara/Services/H264Decoder.cs" Link="H264Decoder.cs"/>

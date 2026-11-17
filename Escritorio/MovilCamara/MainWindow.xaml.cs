@@ -48,7 +48,7 @@ public partial class MainWindow : Window
                 Dispatcher.BeginInvoke(() =>
                 {
                     var camera = cameraDevices.FirstOrDefault(c => c.Id == id);
-                    if (camera != null) camera.AudioStatus = active ? "Micrófono recibido · 48 kHz mono" : "Micrófono apagado";
+                    if (camera != null) camera.AudioStatus = active ? "Micrófono recibido · 48 kHz mono" : "Sin audio recibido";
                 });
             };
             hub.VideoStateChanged += (id, active, message) => Dispatcher.BeginInvoke(() =>
@@ -81,7 +81,7 @@ public partial class MainWindow : Window
             {
                 var keyPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "WilkensTech", "WTMultiCam", "obs-output.key");
-                obsOutput = new ObsDirectServer(ObsFrameEncoder.Encode, ObsFrameEncoder.NoSignal(), keyPath);
+                obsOutput = new ObsDirectServer(ObsFrameEncoder.Encode, ObsFrameEncoder.NoSignal(), keyPath, hub.AudioMixer);
                 obsOutput.Error += message => Dispatcher.BeginInvoke(() => SearchProgress.Text = message);
                 obsOutput.Start();
                 ObsOutputStatus.Text = "Directa local";
@@ -116,7 +116,7 @@ public partial class MainWindow : Window
             var camera = cameraDevices.FirstOrDefault(c => c.Id == d.Id);
             if (camera == null) { camera = new CameraDeviceViewModel(d.Id); cameraDevices.Add(camera); }
             camera.Name = d.Name; camera.Address = d.Address; camera.IsPaired = d.Paired;
-            camera.AudioStatus = hub.IsAudioActive(d.Id) ? "Micrófono recibido · 48 kHz mono" : "Micrófono apagado";
+            camera.AudioStatus = hub.IsAudioActive(d.Id) ? "Micrófono recibido · 48 kHz mono" : "Sin audio recibido";
             camera.Status = d.Paired ? "Emparejado" : "Disponible para conectar";
             camera.VirtualCameraActive = virtualCameras?.IsConfigured(d.Id) == true;
             if (virtualCameras?.IsActive(d.Id) == true) camera.VirtualCameraStatus = "Cámara virtual activa · 1080p30";
@@ -207,6 +207,25 @@ public partial class MainWindow : Window
         { SearchProgress.Text = "No se pudo copiar el enlace OBS: " + ex.Message; }
     }
 
+    private void CopyObsAudioLink_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button button || button.Tag is not string id) return;
+        if (obsOutput == null)
+        {
+            MessageBox.Show(this, "La salida de audio no está disponible. Revisa el estado del receptor.", "WT MultiCam");
+            return;
+        }
+        try
+        {
+            Clipboard.SetText(obsOutput.GetAudioUrl(id));
+            MessageBox.Show(this,
+                "Enlace de sólo audio copiado. En OBS:\n\n1. Añade una Fuente multimedia por teléfono.\n2. Desmarca Archivo local y pega el enlace en Entrada.\n3. Escribe matroska en Formato de entrada.\n4. Ajusta Buffering de la red a 0 MB.\n\nActiva Enviar micrófono en Android e inicia el envío. La cámara virtual entrega la imagen y esta fuente entrega sólo sonido.\n\nSilencia o retira la fuente A/V anterior del mismo teléfono para evitar audio duplicado. Mantén esta fuente de audio activa y WT MultiCam abierto.",
+                "Micrófono del teléfono en OBS", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or ArgumentException)
+        { SearchProgress.Text = "No se pudo copiar el enlace de audio: " + ex.Message; }
+    }
+
     private async void VirtualCamera_Click(object sender, RoutedEventArgs e)
     {
         if (virtualCameras == null || sender is not System.Windows.Controls.Button button || button.Tag is not string id) return;
@@ -223,7 +242,7 @@ public partial class MainWindow : Window
                 await virtualCameras.EnableAsync(id, camera.Name);
                 if (camera.Source != null) virtualCameras.Offer(id, camera.Source);
                 MessageBox.Show(this, "En OBS añade Dispositivo de captura de video y selecciona WT MultiCam — " + camera.Name +
-                    ".\n\nUsa 1920 × 1080, 30 FPS y NV12. Mantén el receptor abierto.\nPara el micrófono conserva la Fuente multimedia activa, debajo de la cámara virtual en la lista de fuentes.",
+                    ".\n\nUsa 1920 × 1080, 30 FPS y NV12. Mantén el receptor abierto.\nPara el micrófono pulsa Copiar audio OBS y configura una Fuente multimedia con ese enlace. No requiere otra imagen de video.",
                     "Cámara virtual", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }

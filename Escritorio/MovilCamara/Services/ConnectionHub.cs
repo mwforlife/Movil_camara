@@ -28,6 +28,7 @@ public sealed class ConnectionHub : IDisposable
     private readonly X509Certificate2 certificate;
     private readonly ReceiverSessionStore? sessionStore;
     private readonly RemoteCameraControls remoteControls = new();
+    public AudioMixer AudioMixer { get; } = new();
     private readonly ConcurrentDictionary<string, (CameraControls Controls, DateTime Seen)> controlStates = new();
     public CameraControls? GetCameraControls(string id) => controlStates.TryGetValue(id, out var state) &&
         DateTime.UtcNow - state.Seen < TimeSpan.FromSeconds(10) ? state.Controls : null;
@@ -38,6 +39,8 @@ public sealed class ConnectionHub : IDisposable
             return Task.FromResult(new CameraCommandResult(false, "Inicia la cámara en Android y espera el estado de controles."));
         if (expectedCameraId != null && caps.CameraId != expectedCameraId)
             return Task.FromResult(new CameraCommandResult(false, "La cámara seleccionada cambió. Ajusta de nuevo el zoom."));
+        if (operation == "microphone" && (!caps.AudioControlSupported || value is not (0 or 1) || (value == 1 && !caps.MicrophoneAllowed)))
+            return Task.FromResult(new CameraCommandResult(false, "Autoriza Enviar micrófono al iniciar la cámara en Android. Actualiza Android si no informa controles de audio."));
         if ((operation == "zoom" && (value < caps.MinZoom || value > caps.MaxZoom)) ||
             (operation == "torch" && (!caps.TorchSupported || value is not (0 or 1))) ||
             (operation == "exposure" && (value < caps.MinExposure || value > caps.MaxExposure || value != Math.Truncate(value))) ||
@@ -378,10 +381,11 @@ public sealed class ConnectionHub : IDisposable
                             var audio = await AudioWireProtocol.ReadAsync(ssl, timeout.Token);
                             if (audio.TimestampUs <= lastTimestamp) throw new InvalidDataException("Reloj de audio no creciente");
                             lastTimestamp = audio.TimestampUs;
+                            AudioMixer.Observe(id, audio);
                             AudioReceived?.Invoke(id, audio);
                         }
                     }
-                    finally { audioStreams.TryRemove(id, out _); AudioStateChanged?.Invoke(id, false); }
+                    finally { audioStreams.TryRemove(id, out _); AudioMixer.Clear(id); AudioStateChanged?.Invoke(id, false); }
                     return;
                 }
                 if (action == "control")
