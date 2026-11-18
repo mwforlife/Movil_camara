@@ -23,6 +23,8 @@ class VideoSender(private val endpoint: () -> VideoEndpoint?, private val status
     private var profile: com.wilkenstech.movilcamara.camera.CaptureProfile? = null
     @Volatile private var waitingForKey = true
     var requestKeyFrame: () -> Unit = {}
+    var adjustBitrate: (Int) -> Unit = {}
+    private val congestedFrames = AtomicInteger()
     fun configure(value: com.wilkenstech.movilcamara.camera.CaptureProfile) { profile = value }
     private val worker = Executors.newSingleThreadExecutor()
     private val watchdog = Executors.newSingleThreadScheduledExecutor()
@@ -44,6 +46,7 @@ class VideoSender(private val endpoint: () -> VideoEndpoint?, private val status
         synchronized(h264Queue) {
             if (waitingForKey && !frame.keyFrame) return
             if (!h264Queue.offer(frame)) {
+                congestedFrames.incrementAndGet()
                 h264Queue.clear(); waitingForKey = true; requestKeyFrame()
                 if (frame.keyFrame) { h264Queue.offer(frame); waitingForKey = false }
             } else if (frame.keyFrame) waitingForKey = false
@@ -54,7 +57,9 @@ class VideoSender(private val endpoint: () -> VideoEndpoint?, private val status
         active = true
         jpegQuality = if (endpoint()?.host == "127.0.0.1") 70 else 58
         val run = generation.incrementAndGet()
+        congestedFrames.set(0)
         worker.execute {
+            val bitrate = WifiBitrateController()
             while (active && generation.get() == run) {
                 val target = endpoint()
                 if (target == null) {
@@ -88,6 +93,7 @@ class VideoSender(private val endpoint: () -> VideoEndpoint?, private val status
                             reply.optString("error", "El PC rechazó el video. Actualiza ambas apps o selecciona JPEG.")
                         }
                         status("Video activo · " + (settings?.toString() ?: "JPEG"))
+                        if (h264 && target.host != "127.0.0.1") adjustBitrate(bitrate.percent)
                         if (h264) requestKeyFrame()
                         var count = 0
                         var bytes = 0L
@@ -108,11 +114,16 @@ class VideoSender(private val endpoint: () -> VideoEndpoint?, private val status
                             val elapsed = SystemClock.elapsedRealtime() - start
                             if (elapsed >= 1000) {
                                 val averageWrite = writeMillis / count.coerceAtLeast(1)
+                                if (h264 && target.host != "127.0.0.1") {
+                                    bitrate.observe(averageWrite, settings?.fps ?: 30, congestedFrames.getAndSet(0) > 0)
+                                    adjustBitrate(bitrate.percent)
+                                }
                                 if (!h264 && averageWrite > 60) jpegQuality = (jpegQuality - 4).coerceAtLeast(40)
                                 else if (!h264 && averageWrite < 25 && count * 1000 / elapsed >= 18)
                                     jpegQuality = (jpegQuality + 2).coerceAtMost(if (target.host == "127.0.0.1") 76 else 68)
                                 status("Enviando " + (count * 1000 / elapsed) + " FPS · " +
-                                    String.format(java.util.Locale.US, "%.1f", bytes * 8.0 / elapsed / 1000) + " Mbps")
+                                    String.format(java.util.Locale.US, "%.1f", bytes * 8.0 / elapsed / 1000) + " Mbps" +
+                                    (if (h264 && target.host != "127.0.0.1") " · objetivo Wi-Fi ${bitrate.percent}%" else ""))
                                 count = 0; bytes = 0; writeMillis = 0; start = SystemClock.elapsedRealtime()
                             }
                         }
@@ -120,6 +131,9 @@ class VideoSender(private val endpoint: () -> VideoEndpoint?, private val status
                 } catch (_: InterruptedException) { break }
                 catch (ex: Exception) {
                     if (active && generation.get() == run) {
+                        if (profile?.codec == "h264" && target.host != "127.0.0.1") {
+                            bitrate.congested()
+                        }
                         status("Video sin conexión: " + ex.localizedMessage + " · reintentando")
                         try { Thread.sleep(1000) } catch (_: InterruptedException) { break }
                     }

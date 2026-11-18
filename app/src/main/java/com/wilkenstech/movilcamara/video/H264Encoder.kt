@@ -15,11 +15,13 @@ class H264Encoder(private val profile: CaptureProfile, private val orientation: 
     private val worker = Executors.newSingleThreadExecutor()
     @Volatile private var active = false
     private var config = ByteArray(0)
+    private val baseBitrate = (profile.width * profile.height * profile.fps * 0.10).toInt().coerceIn(800_000, 20_000_000)
+    private var appliedBitrate = 0
     val surface: Surface
 
     init {
         val caps = requireNotNull(codec.codecInfo.getCapabilitiesForType("video/avc").encoderCapabilities)
-        val desiredBitrate = (profile.width * profile.height * profile.fps * 0.10).toInt().coerceIn(800_000, 20_000_000)
+        val desiredBitrate = baseBitrate
         val range = requireNotNull(codec.codecInfo.getCapabilitiesForType("video/avc").videoCapabilities).bitrateRange
         val format = MediaFormat.createVideoFormat("video/avc", profile.width, profile.height).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
@@ -75,6 +77,16 @@ class H264Encoder(private val profile: CaptureProfile, private val orientation: 
     }
     fun requestKeyFrame() {
         if (active) try { codec.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0) }) } catch (_: Exception) { }
+    }
+    @Synchronized fun adjustBitrate(percent: Int) {
+        if (!active) return
+        try {
+            val range = codec.codecInfo.getCapabilitiesForType("video/avc").videoCapabilities!!.bitrateRange
+            val target = (baseBitrate.toLong() * percent.coerceIn(25, 100) / 100).toInt().coerceIn(range.lower, range.upper)
+            if (target == appliedBitrate) return
+            codec.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, target) })
+            appliedBitrate = target
+        } catch (_: Exception) { /* Some encoders do not support live bitrate changes. */ }
     }
     fun close() {
         val wasActive = active

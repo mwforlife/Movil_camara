@@ -28,6 +28,7 @@ public sealed class ObsDirectServer : IDisposable
         public Encoded? Current;
         public int VideoReaders, AudioReaders;
         public long AudioSequence;
+        public int AudioGeneration;
         public readonly Queue<(long Sequence, AudioFrame Frame)> Audio = new();
     }
     private sealed record Encoded(byte[] Jpeg, DateTime Received);
@@ -107,7 +108,7 @@ public sealed class ObsDirectServer : IDisposable
     }
     public void ClearAudio(string id)
     {
-        if (feeds.TryGetValue(id, out var feed)) lock (feed.Gate) feed.Audio.Clear();
+        if (feeds.TryGetValue(id, out var feed)) lock (feed.Gate) { feed.AudioGeneration++; feed.Audio.Clear(); }
     }
     public void Clear(string id)
     {
@@ -220,7 +221,7 @@ public sealed class ObsDirectServer : IDisposable
                     if (readVideo && Interlocked.Decrement(ref feed.VideoReaders) == 0)
                         lock (feed.Gate) { feed.Generation++; Interlocked.Exchange(ref feed.Pending, null); Volatile.Write(ref feed.Current, null); }
                     if (readAudio && Interlocked.Decrement(ref feed.AudioReaders) == 0)
-                        lock (feed.Gate) feed.Audio.Clear();
+                        lock (feed.Gate) { feed.AudioGeneration++; feed.Audio.Clear(); }
                 }
                 clients.Release();
             }
@@ -242,6 +243,9 @@ public sealed class ObsDirectServer : IDisposable
         long audioSequence;
         lock (feed.Gate) audioSequence = feed.AudioSequence;
         long nextAudio = 0, nextVideo = 0;
+        var delayLine = new AudioDelayLine();
+        int audioGeneration;
+        lock (feed.Gate) audioGeneration = feed.AudioGeneration;
         Encoded? previous = null;
         using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(10));
         do
@@ -254,12 +258,14 @@ public sealed class ObsDirectServer : IDisposable
                 AudioFrame? audio = null;
                 lock (feed.Gate)
                 {
+                    if (audioGeneration != feed.AudioGeneration) { delayLine.Reset(); audioGeneration = feed.AudioGeneration; }
                     foreach (var item in feed.Audio)
                         if (item.Sequence > audioSequence && DateTime.UtcNow - item.Frame.Received < TimeSpan.FromMilliseconds(100))
                         { audio = item.Frame; audioSequence = item.Sequence; break; }
                 }
-                if (now - nextAudio > 60) nextAudio = now / 20 * 20;
-                var pcm = audio == null ? silence : mixer?.Apply(id, audio.Pcm) ?? audio.Pcm;
+                if (now - nextAudio > 60) { nextAudio = now / 20 * 20; delayLine.Reset(); }
+                var delayed = delayLine.Push(audio?.Pcm ?? silence, mixer?.Get(id).DelayMs ?? 0);
+                var pcm = mixer?.Apply(id, delayed) ?? delayed;
                 await LiveMatroska.WriteSample(stream, 2, nextAudio, pcm, deadline.Token);
                 nextAudio += 20;
             }

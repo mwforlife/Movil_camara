@@ -11,9 +11,11 @@
   <Compile Include="../../Escritorio/MovilCamara/Services/LatestValueDispatcher.cs" Link="LatestValueDispatcher.cs"/>
   <Compile Include="../../Escritorio/MovilCamara/Services/AudioWireProtocol.cs" Link="AudioWireProtocol.cs"/>
   <Compile Include="../../Escritorio/MovilCamara/Services/AudioMixer.cs" Link="AudioMixer.cs"/>
+  <Compile Include="../../Escritorio/MovilCamara/Services/AudioDelayLine.cs" Link="AudioDelayLine.cs"/>
   <Compile Include="../../Escritorio/MovilCamara/Services/LiveMatroska.cs" Link="LiveMatroska.cs"/>
   <Compile Include="../../Escritorio/MovilCamara/Services/UsbConnector.cs" Link="UsbConnector.cs"/>
   <Compile Include="../../Escritorio/MovilCamara/Services/H264Decoder.cs" Link="H264Decoder.cs"/>
+  <Compile Include="../../Escritorio/MovilCamara/Services/H264PacketQueue.cs" Link="H264PacketQueue.cs"/>
   <None Update="Fixtures/frame.jpg" CopyToOutputDirectory="PreserveNewest"/>
  </ItemGroup>
 </Project>

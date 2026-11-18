@@ -63,6 +63,50 @@ if (args.Contains("--obs-output"))
 }
 if (args.Contains("--offline"))
 {
+    using (var videoQueue = new H264PacketQueue())
+    {
+        H264Packet Packet(long time, bool key = false) => new(new byte[4], 0, false, key, time);
+        videoQueue.Offer(Packet(0));
+        Check(!videoQueue.TryTake(out _), "H.264 espera cuadro clave al conectar");
+        videoQueue.Offer(Packet(1, true)); videoQueue.Offer(Packet(2)); videoQueue.Offer(Packet(3));
+        Check(videoQueue.TryTake(out var keyPacket) && keyPacket!.TimestampUs == 1, "cola conserva IDR y orden de dependencias");
+        for (var sequence = 4; sequence <= 9; sequence++) videoQueue.Offer(Packet(sequence));
+        Check(videoQueue.HasPending, "ráfaga breve conserva referencias para recuperar sin esperar otro IDR");
+        videoQueue.Offer(Packet(10));
+        Check(!videoQueue.TryTake(out _) && videoQueue.Dropped == 10, "sobrecarga descarta grupo pendiente sin bloquear recepción");
+        videoQueue.Offer(Packet(6));
+        Check(!videoQueue.TryTake(out _), "no decodificar dependencias tras perder cuadros");
+        videoQueue.Offer(Packet(7, true));
+        Check((await videoQueue.ReadAsync(CancellationToken.None)).TimestampUs == 7, "recuperar con siguiente cuadro clave");
+        using var cancelVideoRead = new CancellationTokenSource();
+        var pendingVideoRead = videoQueue.ReadAsync(cancelVideoRead.Token);
+        cancelVideoRead.Cancel();
+        var cancelledVideoRead = false;
+        try { await pendingVideoRead; } catch (OperationCanceledException) { cancelledVideoRead = true; }
+        Check(cancelledVideoRead, "cancelación libera lector sin cuadros pendientes");
+    }
+    var delay = new AudioDelayLine();
+    var packet = Enumerable.Repeat((byte)7, AudioWireProtocol.PacketBytes).ToArray();
+    Check(delay.Push(packet, 40).All(b => b == 0), "retardo inicia con silencio");
+    packet[0] = 9;
+    Check(delay.Push(packet, 40).All(b => b == 0) && delay.Push(packet, 40)[0] == 7, "retardo de 40 ms conserva orden y copia las muestras");
+    Check(delay.Push(packet, 20).All(b => b == 0) && delay.Push(packet, 20)[0] == 9, "cambiar retardo descarta audio pendiente");
+    delay.Reset();
+    Check(delay.Push(packet, 20).All(b => b == 0), "reiniciar descarta audio anterior");
+    Check(ReferenceEquals(delay.Push(packet, 0), packet), "cero retardo conserva salida inmediata");
+    var independentDelay = new AudioDelayLine();
+    Check(independentDelay.Push(packet, 1000).All(b => b == 0), "otro lector mantiene buffer independiente");
+    for (var i = 1; i < 50; i++) independentDelay.Push(packet, 1000);
+    Check(independentDelay.Push(packet, 1000)[0] == 9, "retardo máximo entrega tras 50 paquetes");
+    foreach (var invalidDelay in new[] { -20, 10, 1020 })
+    {
+        var delayRejected = false;
+        try { delay.Push(packet, invalidDelay); } catch (ArgumentOutOfRangeException) { delayRejected = true; }
+        Check(delayRejected, $"rechazar retardo inválido {invalidDelay}");
+    }
+    var delayMixer = new AudioMixer();
+    delayMixer.SetDelay("a", 120);
+    Check(delayMixer.Get("a").DelayMs == 120 && delayMixer.Get("b").DelayMs == 0, "retardo independiente por teléfono");
     var pcmPacket = new byte[12 + AudioWireProtocol.PacketBytes];
     System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(pcmPacket.AsSpan(0, 4), AudioWireProtocol.PacketBytes);
     System.Buffers.Binary.BinaryPrimitives.WriteInt64BigEndian(pcmPacket.AsSpan(4, 8), 123456);

@@ -1,5 +1,19 @@
 # WT MultiCam — WilkensTech Corp
 
+**Instalador Windows (18-11-2026):** paquete beta x64 en [Instaladores/Windows](Instaladores/Windows/WTMultiCam-Setup-1.0.0-beta.1-win-x64.exe), con .NET/WPF incluido, ADB, proveedor nativo, asistente personalizado y accesos directos. No requiere descarga .NET aparte. [Guía y compilación](Instaladores/README.md). Compilación y carga local comprobadas; falta instalación/actualización/desinstalación en Windows 11 limpio. Android fuera del alcance final de esta entrega: el usuario ya generó APK.
+
+**Corrección de diseño móvil:** vista previa local real 16:9 antes de transmitir; fila fija con iconos Micrófono, Cámara y Controles durante el envío, con Detener debajo. El micrófono puede autorizarse desde la transmisión. Recursos/Kotlin compilados; recompilar Android y validar en dispositivo. Ver [diseño vigente](docs/DISENO_MOVIL.md).
+
+**Nuevo diseño Android (18-11-2026):** conexión, preparación y transmisión con identidad azul/celeste, controles desplegables y parada roja separada. Recursos y Kotlin comprobados; recompilar APK en Android Studio y validar en el teléfono. Ver [recorrido y validación](docs/DISENO_MOVIL.md). Los cortes Wi-Fi siguen pendientes.
+
+**Wi-Fi (18-11, posterior a confirmación USB):** Android incorpora adaptación del bitrate H.264 ante presión de envío sólo por red; conserva resolución/FPS y reduce detalle cuando es necesario. Requiere recompilar Android. APK y mejora física pendientes; USB fue confirmado más fluido con el receptor `build/fluency-desktop`. Ver [plan vigente](plan/PLAN.md).
+
+**Fluidez, revisión posterior (18-11-2026):** para saltos con conexión USB mantenida, recuperación H.264 conserva referencias y evita convertir a RGB salidas atrasadas. Cola acotada de ocho paquetes sustituye tres. Receptor en `build/fluency-desktop`, sólo Windows; mejora física pendiente de confirmar. No implica aceleración GPU.
+
+**Estabilidad de video (18-11-2026):** ante retraso y desconexiones reportados en USB y Wi-Fi, el receptor desacopla lectura H.264 y decodificación mediante cola acotada con recuperación por IDR. Esta revisión requiere actualizar sólo Windows. Validación física pendiente; probar `build/stability-desktop/MovilCamara.exe`. El estado vigente y los pasos de diagnóstico están en [plan](plan/PLAN.md).
+
+**Sincronización manual (18-11-2026):** retardo de audio por teléfono de 0 a 1000 ms, pasos de 20 ms, restablecimiento y guía de palmada en el multiview. Actualizar sólo Windows; valores temporales mientras el receptor está abierto. Si el audio llega tarde, retrasar el video en OBS. Compilación y pruebas locales correctas; falta calibración física. Ver [guía](docs/SINCRONIZACION_AUDIO.md). Cortes/fluidez siguen pendientes; estado vigente en [plan](plan/PLAN.md).
+
 **Controles de audio en multiview (17-11-2026):** medidor de salida, volumen 0-100 %, silencio y micrófono remoto por teléfono. Requiere actualizar ambas apps para iniciar/detener captura desde Windows; autorización Android por sesión. El usuario confirmó recepción de la fuente independiente y reportó retraso/cortes, cuya investigación se aplaza por su instrucción. Ver [uso y verificación](docs/CONTROLES_AUDIO_MULTIVIEW.md).
 
 **Audio independiente (17-11-2026):** botón Copiar audio OBS por teléfono; fuente Matroska sólo PCM para acompañar la cámara virtual sin otra transmisión de imágenes. Recompilar sólo Windows y configurar la nueva Fuente multimedia. Compilación y formato comprobados; prueba HTTP bloqueada por el entorno y validación física de la fuente nueva pendiente. Ver [instrucciones](docs/AUDIO_INDEPENDIENTE.md) y [plan actualizado](plan/PLAN.md). Próximo desarrollo: controles de audio en el multiview, luego sincronización e instalador.

@@ -46,11 +46,15 @@ internal static class Program
         window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
         if (!ReferenceEquals(tiles.SelectedItem, devices[2])) throw new Exception("Se perdió la cámara seleccionada al actualizar");
         var volume = (Slider)window.FindName("AudioVolume");
+        var delay = (Slider)window.FindName("AudioDelay");
+        delay.Value = 120;
+        if (hub.AudioMixer.Get(devices[2].Id).DelayMs != 120) throw new Exception("Retardo no aplicado al teléfono seleccionado");
         var mute = (CheckBox)window.FindName("AudioMute");
         volume.Value = 35; mute.IsChecked = true;
         if (hub.AudioMixer.Get(devices[2].Id).Volume != .35 || !hub.AudioMixer.Get(devices[2].Id).Muted)
             throw new Exception("Los controles de audio no afectan al teléfono seleccionado");
         tiles.SelectedItem = devices[0];
+        if (delay.Value != 0) throw new Exception("Retardo heredado de otro teléfono");
         if (volume.Value != 100 || mute.IsChecked == true) throw new Exception("El audio de otra cámara heredó los ajustes ajenos");
         tiles.SelectedItem = devices[2];
         if (volume.Value != 35 || mute.IsChecked != true) throw new Exception("Cambiar selección pierde ajustes de audio");

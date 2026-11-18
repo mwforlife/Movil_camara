@@ -1,39 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.wilkenstech.movilcamara.camera.CameraScreenLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent" android:layout_height="match_parent"
-    android:padding="12dp" android:background="@color/brand_background">
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="vertical">
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="@string/app_name" android:textAppearance="@style/TextAppearance.WT.Title" android:textSize="18sp" />
-        <TextView android:id="@+id/capture_status" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:layout_marginTop="4dp"
-            android:text="@string/camera_preparing" android:textAppearance="@style/TextAppearance.WT.Body" android:textSize="12sp" />
+<com.wilkenstech.movilcamara.camera.CameraScreenLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:layout_width="match_parent" android:layout_height="match_parent" android:padding="16dp" android:background="@color/brand_background">
+ <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/mobile_live_title" android:textAppearance="@style/TextAppearance.WT.Title" android:textSize="22sp"/>
+  <TextView android:tag="transmission_badge" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/video_connecting" android:textColor="@color/brand_success" android:background="@drawable/bg_connection_card" android:padding="10dp" android:layout_marginTop="10dp" android:textSize="13sp" android:accessibilityLiveRegion="polite"/>
+ </LinearLayout>
+ <FrameLayout android:layout_width="match_parent" android:layout_height="match_parent" android:background="@android:color/black">
+  <TextureView android:id="@+id/preview_texture" android:layout_width="match_parent" android:layout_height="match_parent"/>
+  <com.wilkenstech.movilcamara.camera.JpegPreviewView android:id="@+id/wifi_preview" android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="gone"/>
+ </FrameLayout>
+ <FrameLayout android:layout_width="match_parent" android:layout_height="wrap_content">
+ <ScrollView android:tag="capture_scroll" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="152dp" android:fillViewport="false">
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+   <TextView android:tag="profile_summary" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="@color/brand_text" android:background="@drawable/bg_connection_card" android:padding="12dp" android:textSize="14sp" android:textStyle="bold"/>
+   <TextView android:id="@+id/video_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/video_connecting" android:textColor="@color/brand_accent" android:textSize="12sp" android:paddingVertical="8dp"/>
+   <TextView android:id="@+id/audio_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/microphone_off" android:textColor="@color/brand_muted" android:textSize="12sp"/>
+
+   <LinearLayout android:tag="capture_details" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/mobile_orientation" android:textAppearance="@style/TextAppearance.WT.Body" android:paddingTop="8dp"/>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:baselineAligned="false">
+     <com.google.android.material.button.MaterialButton android:tag="orientation_portrait" style="@style/Widget.WT.Secondary" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:minWidth="0dp" android:textSize="12sp" android:paddingHorizontal="4dp" android:text="@string/mobile_vertical" android:contentDescription="@string/mobile_vertical_lock" app:icon="@drawable/ic_orientation_portrait" app:iconSize="24dp" app:iconTint="@color/brand_accent" android:checkable="true" app:strokeColor="@color/orientation_stroke" app:strokeWidth="2dp"/>
+     <com.google.android.material.button.MaterialButton android:tag="orientation_landscape" style="@style/Widget.WT.Secondary" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:minWidth="0dp" android:textSize="12sp" android:paddingHorizontal="4dp" android:text="@string/mobile_horizontal" android:contentDescription="@string/mobile_horizontal_lock" app:icon="@drawable/ic_orientation_landscape" app:iconSize="24dp" app:iconTint="@color/brand_accent" android:checkable="true" app:strokeColor="@color/orientation_stroke" app:strokeWidth="2dp"/>
     </LinearLayout>
-    <FrameLayout android:layout_width="match_parent" android:layout_height="match_parent"
-        android:background="@android:color/black">
-        <TextureView android:id="@+id/preview_texture" android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-        <com.wilkenstech.movilcamara.camera.JpegPreviewView android:id="@+id/wifi_preview"
-            android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="gone" />
-    </FrameLayout>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="vertical">
-        <TextView android:id="@+id/video_status" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:text="@string/video_connecting"
-            android:textColor="@color/brand_accent" android:textSize="12sp" android:paddingTop="6dp" android:paddingBottom="4dp" />
-        <TextView android:id="@+id/audio_status" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="@string/microphone_off" android:textColor="@color/brand_muted" android:textSize="12sp" android:paddingBottom="4dp" />
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal">
-            <com.google.android.material.button.MaterialButton android:id="@+id/switch_camera_button"
-                android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                android:text="@string/switch_camera" android:textAllCaps="false" android:textSize="12sp"
-                android:minWidth="0dp" android:paddingStart="8dp" android:paddingEnd="8dp" android:minHeight="48dp" />
-            <com.google.android.material.button.MaterialButton android:id="@+id/stop_video_button"
-                android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                android:layout_marginStart="8dp" android:text="@string/stop_video" android:textAllCaps="false"
-                android:textSize="12sp" android:minWidth="0dp" android:paddingStart="8dp" android:paddingEnd="8dp" android:minHeight="48dp" />
-        </LinearLayout>
-    </LinearLayout>
+    <com.google.android.material.button.MaterialButton android:tag="quality_settings" style="@style/Widget.WT.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/quality_choice_label"/>
+    <TextView android:id="@+id/capture_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/camera_preparing" android:textAppearance="@style/TextAppearance.WT.Body" android:textSize="12sp" android:paddingVertical="6dp"/>
+   </LinearLayout>
+
+  </LinearLayout>
+ </ScrollView>
+   <LinearLayout android:tag="capture_actions" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_gravity="bottom" android:orientation="vertical">
+   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:baselineAligned="false">
+    <com.google.android.material.button.MaterialButton android:tag="microphone_toggle" app:icon="@drawable/ic_mic_control" style="@style/Widget.WT.Secondary" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:minWidth="0dp" android:minHeight="76dp" app:iconGravity="textTop" app:iconSize="24dp" app:iconTint="@color/brand_text" android:paddingHorizontal="4dp" android:textSize="11sp" android:text="@string/mobile_mic_start"/>
+    <com.google.android.material.button.MaterialButton android:id="@+id/switch_camera_button" app:icon="@drawable/ic_camera_control" style="@style/Widget.WT.Secondary" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginHorizontal="6dp" android:minWidth="0dp" android:minHeight="76dp" app:iconGravity="textTop" app:iconSize="24dp" app:iconTint="@color/brand_text" android:paddingHorizontal="4dp" android:textSize="11sp" android:text="@string/mobile_camera_action"/>
+    <com.google.android.material.button.MaterialButton android:tag="controls_toggle" app:icon="@drawable/ic_controls_control" style="@style/Widget.WT.Secondary" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:minWidth="0dp" android:minHeight="76dp" app:iconGravity="textTop" app:iconSize="24dp" app:iconTint="@color/brand_text" android:paddingHorizontal="4dp" android:textSize="11sp" android:text="@string/mobile_controls_action"/>
+   </LinearLayout>
+   <com.google.android.material.button.MaterialButton android:id="@+id/stop_video_button" style="@style/Widget.WT.Danger" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/stop_video"/>
+   </LinearLayout>
+ </FrameLayout>
 </com.wilkenstech.movilcamara.camera.CameraScreenLayout>

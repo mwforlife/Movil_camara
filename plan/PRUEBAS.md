@@ -1,6 +1,80 @@
 # PRUEBAS - WT MultiCam
 
-Actualizado: 17 de noviembre de 2026. Plan vigente: PLAN.md. Tareas: TODO.md.
+Actualizado: 18 de noviembre de 2026. Plan vigente: PLAN.md. Tareas: TODO.md.
+
+## Empaquetado Windows — 18-11
+
+- Usuario confirma orientación manual funcional, señala controles estrechos en horizontal y pide instaladores. Luego indica que ya generó APK y solicita concentrarse exclusivamente en escritorio. No se genera ni sustituye APK en esta entrega.
+- Publicación Release win-x64 autocontenida con runtime/WPF 8.0.31 de caché local y apphost 8.0.34 del SDK instalado; no se requiere descargar runtime aparte. Los intentos de restauración en línea fallaron por DNS; se resolvió sin alterar permisos mediante fuentes locales.
+- `--verify-installation` del EXE publicado: resultado 0; comprueba que CoreLib/WPF se cargan de la carpeta publicada, carga la DLL nativa y localiza ADB. Informe en `build/packaging/verification.txt`. No inicia hub ni captura ni registra cámaras.
+- ADB incluido ejecuta versión 1.0.41 / Platform Tools 37.0.0 correctamente. Fuente/NOTICE incluidos.
+- Asistente Inno Setup compilado con identidad, icono, idioma español y .NET incluido. Fuentes reproducibles en `Instaladores/Fuentes`; artefacto final en `Instaladores/Windows` y SHA256 adjunto.
+- Desinstalación: limpieza de cámaras sólo después de confirmar; bloqueo si la app está abierta o no se pueden retirar. Se conservan vínculos y proveedor/COM protegidos compartidos. No se probó desinstalando las cámaras del usuario.
+- Pendientes: Windows limpio, actualización, desinstalación/cancelación, uso de cámaras por OBS/otras cuentas, integración de USB por fabricante. La imagen generada del instalador es propuesta visual, no captura real del asistente.
+
+## Orientación manual en transmisión — 18-11
+
+- Implementado exactamente en Controles: dos botones con iconos en una línea, Vertical/Horizontal. Solicitan orientación fija de actividad, no orientación del sensor; cámara y disposición siguen el display ya utilizado por el protocolo. Se restaura la política previa al detener.
+- No se cambia bitrate/resolución ni se llama a reiniciar captura por pulsar orientación. La actividad maneja `orientation|screenSize`; quedan pendientes continuidad física, fabricantes, frontal/trasera y salida OBS.
+- AAPT2 recompila/enlaza recursos correctamente y todos los fuentes Kotlin compilan con R actualizado, salida 0. APK completo y prueba en dispositivo pendientes, según la limitación de Gradle ya registrada.
+
+## Corrección de vista previa y acciones — 18-11
+
+- Usuario detecta que faltan el visor de preparación y controles como en el concepto; no se considera aceptada la implementación anterior por compilar.
+- Se añade modo de captura local sólo TextureView, sin encoder/ImageReader, sin sender ni micrófono. El controlador conserva sus guardas de generación al cambiar superficie; su estado remoto figura inactivo en vista previa.
+- Permiso de cámara distingue abrir vista previa de iniciar transmisión. Micrófono local durante envío puede pedir RECORD_AUDIO; respuesta ligada a la captura actual para no activar audio en otra sesión.
+- Fila fija de tres acciones con iconos y Detener debajo; área de detalles desplazable reserva el alto medido de los botones. Pendiente comprobar visualmente en teléfono, especialmente letra grande y horizontal.
+- Recursos AAPT2 recompilados/enlazados con Android 36 y símbolos locales: salida 0. No se afirma APK ensamblado ni prueba de dispositivos; sigue pendiente el proceso completo desde Android Studio.
+- Todos los fuentes Kotlin recompilados con R actualizado: salida 0 en `build/checks/mobile-ui/compile.log`. La compilación no verifica apertura de cámara, permisos ni distribución visual real.
+
+## Implementación de diseño móvil aprobado — 18-11
+
+- Usuario aprueba el concepto visual y solicita implementarlo. Se rediseñan layouts nativos y navegación de conexión/preparación/transmisión, sin migrar de Kotlin/XML.
+- AAPT2: recursos compilados y enlazados con Android 36 y símbolos locales de dependencias, salida 0; artefactos en `build/checks/mobile-ui`. No constituye APK instalable completo.
+- Compilación Kotlin de todos los fuentes con R actualizado y tipos locales: salida 0, registro `build/checks/mobile-ui/compile.log`. IDs/tipos View Binding existentes conservados.
+- Se mantiene pendiente ensamblado Gradle (bloqueo de caché ya registrado), regeneración de bindings y prueba visual/funcional en teléfono. No se afirma parecido visual validado mediante captura real.
+- El usuario reportó mejora parcial del lag por red pero muchos cortes antes de cambiar a diseño; la investigación de desconexiones no se declara resuelta por estos cambios.
+
+## Wi-Fi después de mejora USB - 18-11
+
+- Usuario confirma USB bastante más fluido; red todavía funciona mal. No hay medición de retraso/FPS ni validación sostenida de USB.
+- Antes H.264 tenía bitrate fijo según resolución/FPS, mientras JPEG ya adaptaba calidad. Android ahora solicita reducir bitrate si la cola se satura o el promedio de escritura supera el presupuesto por cuadro; recupera lentamente tras ocho ventanas de envío sano. Límites 25-100 % del objetivo original y rango del codec. El objetivo se conserva durante reintentos de esa captura y se reinicia al iniciar otra. Loopback/USB no adapta.
+- No se altera resolución, FPS, TLS, cola AVC ni watchdog. Si el codec rechaza ajustes dinámicos, se conserva su configuración; el porcentaje mostrado es un objetivo solicitado, no bitrate aplicado confirmado. No hay aceleración GPU nueva ni medición de capacidad Wi-Fi.
+- Ensamblado APK por Gradle bloqueado al intentar abrir el lock del wrapper en la caché del usuario (acceso denegado). No hay APK nuevo disponible todavía; no se requiere cambiar permisos globales. Prueba en dispositivo pendiente.
+- Validación alternativa completada: todos los fuentes Kotlin de `app/src/main/java` compilados con el compilador local, Android 36 y dependencias/generados locales; salida en `build/checks/wifi-classes`, registro `wifi-compile.log`, código 0. No equivale a ensamblar/firmar APK. Prueba ejecutable `tools/WifiBitrateChecks.kt` aprobada: congestión por cola/escritura, límite inferior/superior, histéresis e independencia entre sesiones.
+
+## Recuperación de fluidez - reporte posterior del 18-11
+
+- Usuario: por cable más estable, sin pérdida de conexión en esta prueba, pero saltos y retraso ocasionales. No equivale a validación de estabilidad sostenida o de ambos transportes.
+- Riesgo de la revisión anterior: tres paquetes a 30 FPS dejan poco margen frente a pausas breves; al saturar se espera IDR, lo cual puede producir congelación visible. Ahora ocho paquetes como límite de seguridad y recuperación descartando sólo la conversión RGB de las salidas antiguas, conservando la decodificación AVC y sus referencias. Si se supera el límite, se mantiene recuperación por IDR.
+- Receptor compilado sin advertencias/errores en `build/fluency-desktop`; 73 comprobaciones sin sockets aprobadas. Prueba nativa H.264 de recuperación a 640×360 aprobada: se omiten dos de cada tres conversiones y se valida RGB gris al volver a presentar. No es una medición de rendimiento ni una prueba de conectividad.
+- La captura de DroidCam no demuestra aceleración GPU activa. Esta implementación no añade GPU, no modifica Android ni promete resolver todas las causas. Pendiente comparar multiview y OBS con teléfonos reales y medir tiempos por etapa.
+- Repetición nativa con `--catch-up --1080p30` aprobada: salida RGB32 de 8.294.400 bytes, gris esperado tras decodificar cuadros sin presentación intermedios. Se verificó corrección del formato; no se midieron 30 FPS sostenidos.
+
+## Retraso y desconexiones de video - reporte posterior del 18-11
+
+- Usuario reporta mucho retraso y pérdidas frecuentes; confirma ambos transportes: USB y Wi-Fi. Se levanta el aplazamiento de estabilidad para priorizar este problema.
+- Inspección: el receptor leía el siguiente paquete H.264 sólo después de decodificar el anterior. Esto permite acumular datos en TCP cuando el decoder no sostiene la velocidad; Android tiene un watchdog que cierra escrituras bloqueadas más de 1500 ms. No hay captura temporal que demuestre que sea la única causa del reporte.
+- Corrección Windows: lectura TLS independiente, máximo tres paquetes comprimidos pendientes, descarte de dependencias hasta próximo IDR tras saturación. No se aumenta el timeout ni se descartan P-frames aislados para continuar decodificando referencias rotas. JPEG conserva su ruta actual.
+- Se conservan detalles de errores de recepción/codec en el estado del teléfono; COMException se informa sin dejar una tarea fallida sin observación.
+- Compilación Windows sin advertencias/errores y 72 comprobaciones locales aprobadas (seis nuevas sobre orden, saturación, recuperación y cancelación). No prueban conectividad ni latencia física. Validación con teléfonos/OBS pendiente.
+- Ejecutable de prueba en `build/stability-desktop/MovilCamara.exe`; no se cerró ni sustituyó la app que el usuario tenga abierta. Android no cambia en esta corrección.
+
+## Sincronización manual - 18-11-2026
+
+- Implementado retardo PCM 0-1000 ms/20 ms, por teléfono y con cola independiente por lector OBS. Cambios de retardo y reinicios de audio descartan el buffer; volumen/silencio se aplican después del retardo para silenciar también las muestras pendientes.
+- Receptor WPF compilado en `build/sync-desktop`, sin advertencias ni errores. La aplicación abierta por el usuario no se cerró ni sustituyó.
+- Pruebas locales cubren orden/copia de muestras, silencio inicial, retardo máximo, reinicio, cambios de valor, valores inválidos e independencia entre teléfonos/lectores. La prueba WPF comprueba que el ajuste se aplica al teléfono seleccionado y no se hereda al seleccionar otro.
+- Resultado: 66 comprobaciones sin sockets aprobadas y prueba WPF aprobada; cuatro capturas sintéticas con 2/5 cámaras a 1400×900 y 1000×720 en `build/checks/sync-multiview`. Revisión visual de 1000×720: controles de sincronización accesibles y panel lateral desplazable. Estas imágenes no contienen cámaras reales.
+- Pendiente: palmadas reales en OBS, desfase antes/después por teléfono/transporte, reconexión, mute durante retardo, duración y deriva. No se afirma sincronía medida ni resolución de cortes. Las comprobaciones locales no sustituyen esta validación.
+
+## Confirmación de controles de audio - 18-11-2026
+
+- Después de las instrucciones de probar medidor, volumen, silencio, micrófono remoto y selección, el usuario responde: “Todo eso va bien”. Se registra como confirmación de funcionamiento básico de esos controles.
+- No se especifican modelos, transportes, duración ni casos de permisos denegados/reconexión; esos escenarios siguen pendientes.
+- No se infiere que se hayan resuelto el retraso inicial o los cortes de audio reportados previamente. Estabilidad/fluidez continúan aplazadas según la decisión del usuario.
+- Siguiente hito: medir sincronización con palmada visible/audible por teléfono y documentar qué señal llega primero y cuántos milisegundos, antes de elegir la compensación.
+- Esta actualización sólo modifica documentación; no se ejecutaron nuevas pruebas del producto.
 
 ## Controles de audio del multiview - 17-11-2026
 

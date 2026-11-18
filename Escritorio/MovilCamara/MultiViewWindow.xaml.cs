@@ -175,9 +175,10 @@ public partial class MultiViewWindow : Window
         var mix = hub.AudioMixer.Get(camera.Id);
         var caps = hub.GetCameraControls(camera.Id);
         syncingAudio = true;
-        try { AudioVolume.Value = mix.Volume * 100; AudioMute.IsChecked = mix.Muted; }
+        try { AudioVolume.Value = mix.Volume * 100; AudioMute.IsChecked = mix.Muted; AudioDelay.Value = mix.DelayMs; }
         finally { syncingAudio = false; }
         AudioVolumeLabel.Text = $"Volumen de salida: {mix.Volume * 100:F0} %";
+        AudioDelayLabel.Text = $"Retardo de audio: {mix.DelayMs} ms";
         AudioMeter.Value = double.IsNegativeInfinity(mix.OutputDb) ? 0 : Math.Clamp((mix.OutputDb + 60) / 60 * 100, 0, 100);
         AudioLevelLabel.Text = (mix.Muted ? "Silenciado" : mix.Fresh ?
             (double.IsNegativeInfinity(mix.OutputDb) ? "−∞ dBFS" : $"{mix.OutputDb:F1} dBFS") : "Sin muestras recientes") + " · nivel de salida";
@@ -200,6 +201,22 @@ public partial class MultiViewWindow : Window
         if (syncingAudio || hub == null || CameraTiles?.SelectedItem is not CameraDeviceViewModel camera) return;
         hub.AudioMixer.SetMuted(camera.Id, AudioMute.IsChecked == true); RefreshAudio();
     }
+    private void AudioDelayChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (syncingAudio || hub == null || CameraTiles?.SelectedItem is not CameraDeviceViewModel camera) return;
+        hub.AudioMixer.SetDelay(camera.Id, (int)Math.Round(e.NewValue / 20) * 20); RefreshAudio();
+    }
+    private void ResetAudioDelay(object sender, RoutedEventArgs e)
+    {
+        if (CameraTiles.SelectedItem is not CameraDeviceViewModel camera) return;
+        hub.AudioMixer.SetDelay(camera.Id, 0); RefreshAudio();
+    }
+    private void CalibrateAudio(object sender, RoutedEventArgs e) => MessageBox.Show(this,
+        "Graba tres palmadas visibles en OBS y revisa el archivo cuadro a cuadro.\n\n" +
+        "Si el sonido se adelanta a las manos, aumenta el retardo de audio de este teléfono (3 cuadros a 30 FPS son 100 ms; usa 100 ms).\n\n" +
+        "Si el sonido llega tarde, deja este retardo en 0 y retrasa el video de esa cámara en OBS.\n\n" +
+        "Repite al inicio y al final de una grabación y al cambiar USB/Wi-Fi, resolución o FPS. Evita sumar dos correcciones de audio entre esta app y OBS. No se mide automáticamente.",
+        "Calibrar sincronización", MessageBoxButton.OK, MessageBoxImage.Information);
     private async void ToggleMicrophone(object sender, RoutedEventArgs e)
     {
         if (CameraTiles.SelectedItem is CameraDeviceViewModel camera && hub.GetCameraControls(camera.Id) is { } caps)

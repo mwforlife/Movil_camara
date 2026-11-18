@@ -41,3 +41,7 @@ google-services.json
 **/.vs/
 *.user
 *.suo
+
+# Generated Windows installers
+Instaladores/Windows/*.exe
+Instaladores/Windows/*.zip

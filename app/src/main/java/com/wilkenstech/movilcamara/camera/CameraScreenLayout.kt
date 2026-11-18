@@ -33,7 +33,7 @@ class CameraScreenLayout @JvmOverloads constructor(
             val sideSpec = MeasureSpec.makeMeasureSpec(sidebar, MeasureSpec.EXACTLY)
             val contentSpec = MeasureSpec.makeMeasureSpec(availableHeight, MeasureSpec.AT_MOST)
             header.measure(sideSpec, contentSpec)
-            controls.measure(sideSpec, contentSpec)
+            controls.measure(sideSpec, MeasureSpec.makeMeasureSpec(max(0, availableHeight - header.measuredHeight - gap), MeasureSpec.AT_MOST))
             viewfinder.measure(
                 MeasureSpec.makeMeasureSpec(max(0, availableWidth - sidebar - gap), MeasureSpec.EXACTLY),
                 MeasureSpec.makeMeasureSpec(availableHeight, MeasureSpec.EXACTLY)
@@ -42,7 +42,7 @@ class CameraScreenLayout @JvmOverloads constructor(
             val fullWidth = MeasureSpec.makeMeasureSpec(availableWidth, MeasureSpec.EXACTLY)
             val wrapHeight = MeasureSpec.makeMeasureSpec(availableHeight, MeasureSpec.AT_MOST)
             header.measure(fullWidth, wrapHeight)
-            controls.measure(fullWidth, wrapHeight)
+            controls.measure(fullWidth, MeasureSpec.makeMeasureSpec((availableHeight * .52).toInt(), MeasureSpec.AT_MOST))
             viewfinder.measure(fullWidth, MeasureSpec.makeMeasureSpec(
                 max(0, availableHeight - header.measuredHeight - controls.measuredHeight - 2 * gap),
                 MeasureSpec.EXACTLY

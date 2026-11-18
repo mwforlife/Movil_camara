@@ -1,15 +1,31 @@
 # PLAN - WT MultiCam
 
-Actualizado: 17 de noviembre de 2026.
+Actualizado: 18 de noviembre de 2026.
 Proyecto: C:\xampp\htdocs\Movil_camara. Empresa: WilkensTech.
 
 Punto de entrada para retomar: [TODO.md](TODO.md) contiene tareas y [PRUEBAS.md](PRUEBAS.md) conserva evidencia, validaciones pendientes e historial. El estado de este archivo sustituye instrucciones antiguas de captura de ventana o de volver a ofrecer 60 FPS.
 
 ## Estado vigente
 
+Entrega de instalador Windows solicitada el 18-11: el usuario ya generó APK y limita el trabajo a computador. Preparado asistente Inno Setup personalizado en `Instaladores/Windows`, receptor x64 con .NET/WPF 8.0.31 integrados, ADB y proveedor nativo. No necesita descarga .NET separada. Fuentes y guía en [Instaladores](../Instaladores/README.md). Publicación y carga del runtime/proveedor comprobadas; falta instalación/actualización/desinstalación en equipo limpio. Se conservan datos y componentes protegidos compartidos al desinstalar. No se ejecuta instalación sobre el equipo actual. El usuario confirma orientación manual funcional, pero controles horizontal siguen estrechos: ajuste visual pendiente, fuera del alcance final Windows de esta entrega.
+
+Último ajuste solicitado: sólo en Controles de transmisión se incorporan dos iconos en una fila, Vertical/Horizontal. Fijan toda la actividad y la orientación de cámara/salida mediante la rotación de pantalla existente; al detener se restaura la política anterior. No se añade selector a preparación. Validación en teléfono pendiente.
+
+Corrección tras revisión del usuario: faltaba la vista previa de preparación y la fila de acciones del concepto. Ahora se implementa visor local real 16:9 antes de transmitir, con permiso de cámara y sin codificación/envío/audio. Se reutiliza el controlador de cámara cambiando su superficie; controles remotos no se habilitan en modo vista previa. En transmisión se deja fila fija con iconos Micrófono/Cámara/Controles y Detener debajo; micrófono permite autorización local durante el envío. Validación física pendiente tras recompilar Android. Esta revisión sustituye la limitación anterior de no abrir cámara en preparación.
+
+Último trabajo autorizado: implementar el diseño móvil aprobado. Android ahora organiza Conectar → Preparar cámara → En transmisión, con identidad azul/celeste, tarjetas, controles desplegables y parada separada. Perfiles compatibles y autorizaciones existentes se conservan; no hay vista previa ficticia ni lista de PCs inventada. Recursos AAPT2 y compilación Kotlin comprobados; APK/validación visual en teléfono pendientes. Sólo Android requiere recompilar para el diseño. Ver [diseño móvil](../docs/DISENO_MOVIL.md). La última prueba de red indica lag algo mejor, pero desconexiones frecuentes; causa pendiente de mensaje/captura del fallo. No se considera estable Wi-Fi.
+
+Última confirmación del usuario: USB bastante más fluido; Wi-Fi sigue funcionando mal. Prioridad actual: transmisión por red. Se añade en Android control adaptativo del bitrate H.264 por presión de cola/tiempo de escritura, sólo para destino no loopback; USB mantiene su política. Reducción multiplicativa hasta 25 % y recuperación lenta tras ocho ventanas sanas, limitada al bitrate admitido por el codec. Conserva resolución y FPS configurados; puede reducir detalle. Es una heurística de congestión de envío, no una medida de ancho de banda/RTT. Requiere recompilar/instalar Android; receptor Windows `build/fluency-desktop` se conserva. Falta prueba física por Wi-Fi.
+
+Revisión de fluidez posterior: por USB el usuario mantiene conexión, pero observa saltos y retraso ocasionales. La captura de DroidCam muestra 1080p AVC/H.264 y una opción de aceleración de hardware, sin demostrar que esté activa. En WT MultiCam se conserva H.264 y se mejora recuperación: cola acotada de ocho paquetes (sustituye tres), decodificar referencias pendientes sin convertir sus salidas viejas a RGB y presentar el cuadro reciente. Esto reduce trabajo de conversión/asignación al alcanzar el tiempo actual; no habilita aceleración GPU ni garantiza latencia. Probar Windows en `build/fluency-desktop`; Android sin cambios. Validación física pendiente.
+
+Prioridad actual (18-11, reporte posterior): el usuario informa mucho retraso de video y desconexiones frecuentes tanto por USB como por Wi-Fi. Se retoma estabilidad antes de continuar calibración/instalador. Primera corrección Windows: lectura H.264 separada de decodificación, cola máxima de tres paquetes con recuperación por cuadro clave, y detalle del fallo en el estado del video. Es una causa potencial de acumulación y bloqueo corregida en código, no una solución física confirmada. Próximo paso: comparar multiview y OBS con el receptor de `build/stability-desktop`, un teléfono primero, registrar perfil y texto del fallo si persiste.
+
+Sincronización manual implementada el 18-11: el multiview incorpora retardo de audio por teléfono de 0 a 1000 ms en pasos de 20 ms, restablecimiento y guía de palmada. Afecta a las salidas Matroska de audio y A/V. Ajuste temporal por ID mientras el receptor está abierto; se conserva al reconectar dentro del proceso, pero requiere recalibrar al cambiar transporte/perfil. Si el audio llega tarde, usar 0 ms y retrasar el video en OBS. No hay medición automática ni corrección de deriva. Falta medir y validar físicamente el resultado; los cortes siguen pendientes. Ver [guía de sincronización](../docs/SINCRONIZACION_AUDIO.md).
+
 El usuario confirmó funcionamiento correcto de video, audio, multiview y zoom. Las capturas muestran Motorola moto e30 y Xiaomi 25080RABDG en el multiview y dos fuentes de captura con imágenes distintas en OBS. La confirmación es de funcionamiento básico; no especifica duración, latencia medida ni todos los casos de recuperación.
 
-Último reporte: la fuente de audio independiente llega a OBS, con retraso inicial y cortes ocasionales. El usuario aplaza la investigación de estabilidad/fluidez y solicita continuar con controles de audio. Ya están implementados medidor de pico de salida, volumen 0-100 %, silencio y activación/detención remota autorizada por sesión; falta validarlos en el teléfono. En esta revisión hay que actualizar Windows y Android. Ver [controles de audio](../docs/CONTROLES_AUDIO_MULTIVIEW.md).
+Último reporte: la fuente de audio independiente llega a OBS, con retraso inicial y cortes ocasionales. El usuario aplaza la investigación de estabilidad/fluidez y solicita continuar con controles de audio. Ya están implementados medidor de pico de salida, volumen 0-100 %, silencio y activación/detención remota autorizada por sesión; el usuario confirmó el 18-11 que los controles funcionan bien. La confirmación no detalla transportes, modelos, permisos denegados ni pruebas sostenidas. Ver [controles de audio](../docs/CONTROLES_AUDIO_MULTIVIEW.md).
 
 | Área | Implementado y confirmado | Pendiente específico |
 |---|---|---|
@@ -20,7 +36,7 @@ El usuario confirmó funcionamiento correcto de video, audio, multiview y zoom. 
 | Correcciones | Reinicio vertical USB y cierre prematuro 0xC00D3E85 resueltos y confirmados | Mantener regresiones. |
 | Audio previo | Micrófono opcional PCM 48 kHz mono por TLS y salida Matroska A/V; recepción confirmada | Medir sincronía y deriva. |
 | Audio independiente | Fuente de sólo audio y botón Copiar audio OBS; recepción confirmada por el usuario | Investigar retraso inicial y cortes ocasionales en fase posterior. |
-| Controles de audio | Medidor, volumen, silencio de salida y micrófono remoto con confirmación Android | Compilación/locales comprobados; prueba física pendiente. |
+| Controles de audio | Medidor, volumen, silencio de salida y micrófono remoto con confirmación Android | Funcionamiento básico confirmado por el usuario; matriz detallada pendiente. |
 | Distribución | Registro del proveedor disponible desde la app | Instalador completo aún pendiente. |
 
 La cámara virtual entrega video, no un micrófono del sistema. La salida de sólo audio es una Fuente multimedia independiente. Los enlaces A/V anteriores se conservan. La fuente independiente sólo requirió cambios Windows; los controles remotos nuevos requieren además actualizar Android. Volumen/silencio funcionan en Windows con el APK anterior, pero no habilitan su botón remoto.
@@ -30,7 +46,7 @@ La cámara virtual entrega video, no un micrófono del sistema. La salida de só
 | Orden | Entrega | Estado |
 |---|---|---|
 | 1 | Audio independiente por teléfono, sin otra transmisión de imágenes a OBS | Recepción confirmada; retraso/cortes pendientes. |
-| 2 | Controles de audio en multiview: activar/desactivar, silenciar, volumen y nivel | Implementados; probar en ambos teléfonos. |
+| 2 | Controles de audio en multiview: activar/desactivar, silenciar, volumen y nivel | Funcionamiento básico confirmado; siguiente hito: sincronización medida. |
 | 3 | Ajuste de sincronización medido por teléfono | Pendiente. |
 | 4 | Instalador/desinstalador Windows | Pendiente. |
 
@@ -47,7 +63,7 @@ La fuente nueva no activa la captura en Android por conectarse desde OBS. El per
 
 ### Paso 2: controles de audio en el multiview
 
-Implementados. Próxima acción: cerrar el receptor, recompilar ambas aplicaciones, marcar Enviar micrófono en Android al iniciar la sesión y probar selección, medidor, volumen, silencio y detener/reactivar desde Windows. La autorización caduca al detener la cámara o salir de Android. Los ajustes de volumen/silencio se mantienen por teléfono durante esta ejecución; no se persisten ni arrancan capturas al reiniciar.
+Funcionamiento básico confirmado por el usuario el 18-11. Próximo paso: medir sincronización con una palmada visible/audible; conservar como pendientes las pruebas detalladas de permisos, cortes y transportes. La autorización caduca al detener la cámara o salir de Android. Los ajustes de volumen/silencio se mantienen por teléfono durante esta ejecución; no se persisten ni arrancan capturas al reiniciar.
 
 1. Mostrar estado real y medidor de nivel por teléfono; definir si representa entrada o salida.
 2. Implementar silenciar y volumen con aplicación inmediata, límites y prevención de saturación. Distinguir silenciar salida de detener captura.

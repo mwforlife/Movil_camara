@@ -84,7 +84,12 @@
       <CheckBox x:Name="AudioMute" Content="Silenciar salida a OBS" Foreground="White" Checked="AudioMuteChanged" Unchecked="AudioMuteChanged" Margin="0,7,0,7"/>
       <Button x:Name="MicrophoneToggle" Content="Activar micrófono" Click="ToggleMicrophone"/>
       <TextBlock x:Name="AudioHelp" Text="Silenciar no detiene la captura. El micrófono necesita autorización en Android al iniciar la sesión." FontSize="11" Foreground="#9AAEC8" Margin="0,6,0,0"/>
-      <Separator Margin="0,16,0,0" Background="#30445F"/>
+        <TextBlock x:Name="AudioDelayLabel" Text="Retardo de audio: 0 ms" Margin="0,14,0,0"/>
+        <Slider x:Name="AudioDelay" Minimum="0" Maximum="1000" TickFrequency="20" IsSnapToTickEnabled="True" SmallChange="20" LargeChange="100" ValueChanged="AudioDelayChanged" Margin="0,8,0,4" AutomationProperties.Name="Retardo del audio a OBS en milisegundos"/>
+        <Button Content="Restablecer retardo" Click="ResetAudioDelay"/>
+        <Button Content="Calibrar con palmada" Click="CalibrateAudio"/>
+        <TextBlock Text="Retrasa el audio de este teléfono. Revisa la sincronización en una grabación de OBS. Ajuste temporal mientras la app está abierta." FontSize="11" Foreground="#9AAEC8" Margin="0,6,0,0"/>
+        <Separator Margin="0,16,0,0" Background="#30445F"/>
      </StackPanel>
      <StackPanel x:Name="ControlsPanel" IsEnabled="False">
       <TextBlock Text="Zoom" FontWeight="SemiBold"/>

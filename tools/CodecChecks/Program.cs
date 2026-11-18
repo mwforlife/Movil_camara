@@ -2,8 +2,8 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using MovilCamara.Services;
 
-var width = args.Contains("--1080p60") ? 1920 : 640;
-var height = args.Contains("--1080p60") ? 1080 : 360;
+var width = args.Contains("--1080p60") || args.Contains("--1080p30") ? 1920 : 640;
+var height = args.Contains("--1080p60") || args.Contains("--1080p30") ? 1080 : 360;
 var fps = args.Contains("--1080p60") ? 60 : 30;
 var frameDuration = 10_000_000L / fps;
 var type = typeof(H264Decoder);
@@ -36,6 +36,7 @@ try
     Array.Fill(raw, (byte)128, width * height, width * height / 2);
     byte[]? pixels = null;
     var encodedCount = 0;
+    var renderedAfterSkip = false;
     for (int i = 0; i < 40; i++)
     {
         var sample = (IntPtr)Private("Sample", raw.Length, raw)!;
@@ -67,7 +68,11 @@ try
                     }
                     finally { Call("NoArgs", buffer, 4); }
                     if (encodedCount == 0) Console.WriteLine("First H.264 access unit: " + bytes.Length + " bytes");
-                    pixels = decoder.Decode(bytes, (long)encodedCount * 1_000_000 / fps) ?? pixels;
+                    var render = !args.Contains("--catch-up") || encodedCount % 3 == 2;
+                    var decoded = decoder.Decode(bytes, (long)encodedCount * 1_000_000 / fps, render);
+                    if (!render && decoded != null) throw new Exception("Catch-up allocated visible RGB output");
+                    if (render && encodedCount >= 2 && decoded != null) renderedAfterSkip = true;
+                    pixels = decoded ?? pixels;
                     encodedCount++;
                 }
                 finally { Release(buffer); }
@@ -76,6 +81,7 @@ try
         }
     }
     if (pixels == null) throw new Exception("Decoder produced no pixels after " + encodedCount + " encoded frames.");
+    if (args.Contains("--catch-up") && !renderedAfterSkip) throw new Exception("No visible output after reference-only decoding");
     if (pixels.Length != width * height * 4 || Math.Abs(pixels[0] - pixels[1]) > 5 || Math.Abs(pixels[1] - pixels[2]) > 5 || pixels[0] < 40)
         throw new Exception("Decoded RGB output is not the expected gray test frame.");
     Console.WriteLine("PASS: real H.264 encode -> decode -> RGB32, " + pixels.Length + " bytes, gray pixel=" + pixels[0]);

@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 
 namespace MovilCamara.Services;
 
-public sealed record AudioMixSnapshot(double Volume, bool Muted, double InputPeak, double OutputPeak, bool Fresh)
+public sealed record AudioMixSnapshot(double Volume, bool Muted, double InputPeak, double OutputPeak, bool Fresh, int DelayMs = 0)
 {
     public double OutputDb => OutputPeak <= 0 ? double.NegativeInfinity : 20 * Math.Log10(OutputPeak);
 }
@@ -16,6 +16,7 @@ public sealed class AudioMixer
         public readonly object Gate = new();
         public double Volume = 1, Peak;
         public bool Muted;
+        public int DelayMs;
         public DateTime Received;
     }
     private readonly ConcurrentDictionary<string, State> states = new();
@@ -26,6 +27,12 @@ public sealed class AudioMixer
         var state = For(id); lock (state.Gate) state.Volume = volume;
     }
     public void SetMuted(string id, bool muted) { var state = For(id); lock (state.Gate) state.Muted = muted; }
+    public void SetDelay(string id, int milliseconds)
+    {
+        if (milliseconds < 0 || milliseconds > 1000 || milliseconds % 20 != 0)
+            throw new ArgumentOutOfRangeException(nameof(milliseconds), "Usa 0-1000 ms en pasos de 20 ms");
+        var state = For(id); lock (state.Gate) state.DelayMs = milliseconds;
+    }
     public void Observe(string id, AudioFrame frame)
     {
         int peak = 0;
@@ -41,7 +48,7 @@ public sealed class AudioMixer
         {
             bool fresh = DateTime.UtcNow - state.Received < TimeSpan.FromMilliseconds(300);
             var peak = fresh ? state.Peak : 0;
-            return new(state.Volume, state.Muted, peak, state.Muted ? 0 : peak * state.Volume, fresh);
+            return new(state.Volume, state.Muted, peak, state.Muted ? 0 : peak * state.Volume, fresh, state.DelayMs);
         }
     }
     public byte[] Apply(string id, byte[] pcm)

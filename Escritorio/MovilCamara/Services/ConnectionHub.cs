@@ -432,6 +432,7 @@ public sealed class ConnectionHub : IDisposable
                     {
                         await writer.WriteLineAsync("{\"ok\":false}"); return;
                     }
+                    var endReason = "Video detenido o conexión interrumpida";
                     try
                     {
                         H264Decoder? decoder = null;
@@ -453,27 +454,56 @@ public sealed class ConnectionHub : IDisposable
                         VideoStateChanged?.Invoke(id, true, "Esperando imagen del teléfono…");
                         var videoAddress = ((IPEndPoint)client.Client.RemoteEndPoint!).Address.ToString();
                         var notified = false;
-                        while (!stop.IsCancellationRequested && sessions.TryGetValue(id, out var sessionSecret) && Equal(secret, sessionSecret))
+                        using var videoStop = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
+                        using var packets = new H264PacketQueue();
+                        // Drain TLS independently of decoding so slow conversion cannot build seconds of TCP backlog.
+                        var receive = h264 ? Task.Run(async () =>
                         {
-                            timeout.CancelAfter(TimeSpan.FromSeconds(8));
-                            VideoFrame frame;
-                            if (h264)
+                            try
                             {
-                                var packet = await VideoWireProtocol.ReadH264Async(ssl, timeout.Token);
-                                var pixels = decoder!.Decode(packet.Data, packet.TimestampUs);
-                                if (pixels == null) continue;
-                                frame = new VideoFrame(Array.Empty<byte>(), packet.Rotation, packet.Mirrored, DateTime.UtcNow, pixels, width, height);
+                                while (!videoStop.IsCancellationRequested)
+                                {
+                                    timeout.CancelAfter(TimeSpan.FromSeconds(8));
+                                    packets.Offer(await VideoWireProtocol.ReadH264Async(ssl, videoStop.Token));
+                                }
                             }
-                            else frame = await VideoWireProtocol.ReadFrameAsync(ssl, timeout.Token);
-                            devices[id] = new(id, name, videoAddress, DateTime.UtcNow, true);
-                            FrameReceived?.Invoke(id, frame);
-                            if (!notified) { Changed?.Invoke(); notified = true; }
+                            finally { videoStop.Cancel(); }
+                        }) : Task.CompletedTask;
+                        try
+                        {
+                            while (!videoStop.IsCancellationRequested && sessions.TryGetValue(id, out var sessionSecret) && Equal(secret, sessionSecret))
+                            {
+                                if (!h264) timeout.CancelAfter(TimeSpan.FromSeconds(8));
+                                VideoFrame frame;
+                                if (h264)
+                                {
+                                    var packet = await packets.ReadAsync(videoStop.Token);
+                                    var pixels = decoder!.Decode(packet.Data, packet.TimestampUs, renderOutput: !packets.HasPending);
+                                    if (pixels == null) continue;
+                                    frame = new VideoFrame(Array.Empty<byte>(), packet.Rotation, packet.Mirrored, DateTime.UtcNow, pixels, width, height);
+                                }
+                                else frame = await VideoWireProtocol.ReadFrameAsync(ssl, timeout.Token);
+                                devices[id] = new(id, name, videoAddress, DateTime.UtcNow, true);
+                                FrameReceived?.Invoke(id, frame);
+                                if (!notified) { Changed?.Invoke(); notified = true; }
+                            }
                         }
+                        finally
+                        {
+                            videoStop.Cancel();
+                            try { await receive; }
+                            catch (OperationCanceledException) when (videoStop.IsCancellationRequested) { }
+                        }
+                    }
+                    catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or System.Runtime.InteropServices.COMException)
+                    {
+                        endReason = ex is OperationCanceledException ? "Video sin datos durante el plazo de recepción o sesión cancelada" : "Video interrumpido: " + ex.Message;
+                        Error?.Invoke("Video de " + name + ": " + endReason);
                     }
                     finally
                     {
                         videoStreams.TryRemove(id, out _);
-                        VideoStateChanged?.Invoke(id, false, "Video detenido o conexión interrumpida");
+                        VideoStateChanged?.Invoke(id, false, endReason);
                     }
                     return;
                 }

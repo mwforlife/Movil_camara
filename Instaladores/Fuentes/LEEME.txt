@@ -1,0 +1,16 @@
+﻿WT MULTICAM · WILKENSTECH
+Edición de prueba 1.0.0-beta.1 — Windows 11 de 64 bits
+
+Este instalador contiene el receptor, .NET Desktop integrado, el proveedor de cámara virtual y ADB con sus avisos de licencia. No requiere Visual Studio ni una descarga separada de .NET.
+
+CONEXIÓN
+Abre WT MultiCam, vincula el teléfono mediante QR o USB y activa la transmisión desde Android. Para USB, autoriza la depuración en el teléfono. Algunos fabricantes requieren su controlador USB en Windows.
+
+OBS
+Activa la cámara virtual de cada teléfono desde el receptor. Windows puede pedir autorización para registrar el proveedor. En OBS selecciona Dispositivo de captura de video y la cámara WT MultiCam correspondiente. El sonido se configura mediante el enlace Copiar audio OBS.
+
+ACTUALIZACIÓN Y DESINSTALACIÓN
+Cierra el receptor antes de actualizar o desinstalar. Al desinstalar se retiran las cámaras configuradas para este usuario; si están en uso, cierra OBS y vuelve a intentarlo. Se conservan los vínculos y preferencias para una reinstalación. El proveedor protegido de Windows y sus registros COM compartidos se conservan; no se borran componentes de otras cuentas.
+
+ESTADO DE LA VERSIÓN
+USB fue confirmado más fluido. La estabilidad Wi-Fi continúa en revisión. Este paquete todavía necesita pruebas de instalación, actualización y desinstalación en otro equipo. No incluye certificado comercial de firma de código.

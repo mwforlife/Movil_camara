@@ -22,6 +22,7 @@ public static class UsbConnector
     {
         var sdk = Environment.GetEnvironmentVariable("ANDROID_HOME") ?? Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT");
         var paths = new[] {
+            Path.Combine(AppContext.BaseDirectory, "Tools", "adb.exe"),
             sdk == null ? "" : Path.Combine(sdk, "platform-tools", "adb.exe"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Android", "Sdk", "platform-tools", "adb.exe")
         };

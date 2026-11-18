@@ -1,8 +1,44 @@
 # TODO - WT MultiCam
 
-Actualizado: 17 de noviembre de 2026.
+Actualizado: 18 de noviembre de 2026.
 Orden: audio independiente → controles de audio en multiview → sincronización → instalador.
 Ver PLAN.md para el paso a paso y PRUEBAS.md para evidencias. Una casilla de implementación no equivale a una validación física o sostenida.
+
+## Diseño móvil aprobado — 18-11
+
+- [x] Añadir sólo en Controles de transmisión iconos Vertical/Horizontal en una fila, fijando cámara e interfaz; restaurar política anterior al detener.
+- [ ] Validar giro manual con el teléfono inmóvil, JPEG/H.264, cámara frontal/trasera, salida OBS, selección marcada y continuidad de audio/video. Verificar restauración al detener/volver y funcionamiento con rotación automática Android desactivada.
+
+- [x] Corregir diferencia respecto del concepto: vista previa local 16:9 en preparación sin enviar video/audio ni crear codificador.
+- [x] Fijar fila de iconos Micrófono/Cámara/Controles fuera del scroll, con Detener debajo; activar micrófono localmente con permiso durante captura.
+- [ ] Comprobar en dispositivo transición vista previa → envío → preparación, cambio de cámara/perfil, permisos concedidos/denegados, rotación, fondo y ausencia de captura/envío en la vista previa.
+
+- [x] Implementar conexión, preparación y transmisión con estilo azul oscuro/celeste y Detener rojo.
+- [x] QR, ayuda USB, estado real de vínculo, perfiles compatibles y autorización de micrófono.
+- [x] Micrófono local por sesión, ajustes desplegables y controles desplazables con superficie conservada al rotar.
+- [x] Compilar/enlazar recursos y compilar fuentes Kotlin con los recursos actualizados.
+- [ ] Ensamblar/reinstalar APK en Android Studio y validar QR/USB, permisos, navegación, micrófono remoto/local y errores.
+- [ ] Revisar visualmente tamaños pequeños, letra grande y rotación en teléfonos reales.
+- [ ] Retomar desconexiones Wi-Fi con texto/captura del error; mejora parcial de lag no confirma estabilidad.
+
+## Estabilidad de transmisión
+
+Prioridad sobre los hitos siguientes: resolver retraso y desconexiones de video reportados el 18-11 en USB y Wi-Fi.
+
+- [x] Registrar confirmación de USB bastante más fluido; no extenderla a Wi-Fi, que el usuario reporta todavía deficiente.
+- [x] Implementar adaptación de bitrate H.264 en Android sólo por red: presión de cola/escritura, reducción y recuperación con histéresis.
+- [ ] Compilar APK e instalar en teléfonos; comprobar soporte de bitrate dinámico por fabricante y mejora física Wi-Fi con mismo perfil.
+- [ ] Medir red local y tiempos por etapa si persiste; no inferir capacidad Wi-Fi sólo del tiempo de escritura TCP. Probar 720p30 como comparación controlada si 1080p30 sigue saturando.
+
+- [x] Revisar recuperación ante pausas breves: ampliar límite de tres a ocho paquetes y evitar conversión RGB de salidas atrasadas, manteniendo decodificación de referencias AVC.
+- [ ] Comparar saltos y retraso con `build/fluency-desktop`, USB y Wi-Fi, mismo perfil 1080p30 H.264. Medir antes/después sin atribuir resolución o formato por sí solos a una mejora.
+- [ ] Evaluar aceleración de hardware Windows con capacidades y mediciones; la revisión actual no la implementa.
+
+- [x] Separar recepción TLS H.264 de la decodificación y acotar a tres paquetes pendientes; tras perder dependencias, esperar siguiente cuadro clave.
+- [x] Mostrar el motivo de interrupción en el estado de video, incluyendo fallos COM del decodificador.
+- [ ] Validar receptor corregido con un teléfono por USB y Wi-Fi; comparar retraso del multiview y de OBS.
+- [ ] Si persiste, registrar codec, resolución/FPS, CPU y texto del fallo; revisar transporte Android, watchdog de escritura y ruta de salida/UI según la etapa afectada.
+- [ ] Repetir con dos teléfonos y sesión prolongada antes de declarar estable.
 
 ## Base completada
 
@@ -32,7 +68,7 @@ Ver PLAN.md para el paso a paso y PRUEBAS.md para evidencias. Una casilla de imp
 - [x] Registrar recepción y problemas reportados; no dar por validada estabilidad o sincronía.
 - [ ] Investigar retraso inicial y cortes de audio en fase de estabilidad/fluidez, aplazada por el usuario.
 
-## 2. Audio en multiview - implementado, prueba física pendiente
+## 2. Audio en multiview - funcionamiento básico confirmado
 
 - [x] Medidor de pico de salida por teléfono, refresco cada 150 ms y nivel cero sin muestras recientes.
 - [x] Volumen 0-100 % y silencio aplicados al publicar PCM, sin modificar entrada ni otras fuentes.
@@ -44,10 +80,17 @@ Ver PLAN.md para el paso a paso y PRUEBAS.md para evidencias. Una casilla de imp
 - [x] Comprobar localmente PCM, silencio, dBFS, independencia, confirmaciones y UI con dos/cinco teléfonos sintéticos.
 - [ ] Probar USB/Wi-Fi y dos teléfonos; documentar necesidad de actualizar Android.
 
-## 3. Sincronización
+- [x] Usuario confirma el 18-11 que los controles de audio funcionan bien; no se infieren casos detallados no reportados.
+
+## 3. Sincronización - siguiente hito
+
+- [x] Implementar retardo manual por teléfono, 0-1000 ms en pasos de 20 ms, aplicado al PCM de salidas audio/A/V.
+- [x] Añadir guía de palmada y restablecer a 0; indicar retardo de video en OBS cuando el audio llega tarde.
+- [x] Mantener buffer acotado por lector; descartar pendientes al cambiar retardo, detener captura o ante atraso del temporizador.
+- [x] Definir ajuste temporal por ID durante el proceso; reconexión conserva el valor, reinicio vuelve a 0. Recalibrar tras cambios de transporte/perfil.
 
 - [ ] Medir palmada visible/audible en milisegundos por teléfono y transporte.
-- [ ] Definir signo/rango y aplicar ajuste según audio adelantado o tardío.
+- [ ] Validar físicamente el rango y la corrección de audio adelantado; el audio tardío requiere retardo de video en OBS.
 - [ ] Evaluar retardo de video cuando retardar audio no resuelva el desfase.
 - [ ] Medir al inicio/final para distinguir desfase fijo y deriva.
 - [ ] Comprobar reconexión, cambios de escena/perfil/transporte y persistencia del ajuste.
@@ -55,8 +98,14 @@ Ver PLAN.md para el paso a paso y PRUEBAS.md para evidencias. Una casilla de imp
 
 ## 4. Instalador Windows
 
-- [ ] Paquete x64, requisitos Windows 11 y política de .NET.
-- [ ] Incluir receptor, proveedor y recursos sin exigir Visual Studio al usuario final.
+- [x] Crear instalador beta x64 personalizado en carpeta Instaladores, con fuentes, marca, accesos y comprobación de carga.
+- [x] Incluir .NET/WPF y ADB; localizar ADB junto al ejecutable antes de buscar SDK externo.
+- [x] Preparar retirada de cámaras del usuario al confirmar desinstalación; conservar datos y proveedor protegido compartido.
+- [ ] Probar instalación/actualización/desinstalación real en Windows 11 limpio, con y sin SDK/.NET y con OBS en uso. Pendiente comprobar escenarios de otra cuenta.
+- [ ] Ajustar amplitud de controles Android en horizontal en un trabajo posterior; usuario limita entrega actual al computador y ya generó APK.
+
+- [x] Paquete beta x64, requisito Windows 11 y .NET/WPF integrado.
+- [x] Incluir receptor, proveedor y recursos sin exigir Visual Studio al usuario final.
 - [ ] Elevación y actualización de DLL en uso, con rutas protegidas.
 - [ ] Desinstalar dispositivos, claves COM y versiones del proveedor sin dejar huérfanos.
 - [ ] Elección explícita para conservar/eliminar vínculos y preferencias.

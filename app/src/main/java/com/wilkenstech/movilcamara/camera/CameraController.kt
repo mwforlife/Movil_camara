@@ -21,7 +21,7 @@ import kotlin.math.abs
 /** Camera capture and encoding are independent of Activity UI and network transmission. */
 class CameraController(
     private val activity: Activity,
-    private val preview: TextureView,
+    private var preview: TextureView,
     private val onFrame: (EncodedFrame) -> Unit,
     private val onStatus: (String) -> Unit,
     private val onError: (String) -> Unit,
@@ -43,7 +43,7 @@ class CameraController(
     private var repeatingRequest: CaptureRequest.Builder? = null
     private var activeCharacteristics: CameraCharacteristics? = null
     @Volatile private var remoteState = RemoteCameraState()
-    fun remoteControls(): org.json.JSONObject = remoteState.copy(active = wanted && remoteState.active).json()
+    fun remoteControls(): org.json.JSONObject = remoteState.copy(active = wanted && !previewOnly && remoteState.active).json()
 
     fun applyRemoteControl(command: org.json.JSONObject): org.json.JSONObject {
         val run = generation
@@ -51,7 +51,7 @@ class CameraController(
             val previous = repeatingRequest?.build()
             try {
                 val state = remoteState
-                require(wanted && run == generation && state.active) { "La cámara ya no está activa" }
+                require(wanted && !previewOnly && run == generation && state.active) { "La cámara ya no está activa" }
                 require(command.getString("cameraId") == state.cameraId) { "La cámara seleccionada cambió" }
                 val request = checkNotNull(repeatingRequest)
                 val configured = checkNotNull(session)
@@ -137,10 +137,23 @@ class CameraController(
     private var encoder: com.wilkenstech.movilcamara.video.H264Encoder? = null
     @Volatile var selectedProfile: CaptureProfile? = null
     fun requestKeyFrame() { encoder?.requestKeyFrame() }
+    fun adjustBitrate(percent: Int) { encoder?.adjustBitrate(percent) }
     @Volatile private var maxWidth = 1280
     @Volatile private var maxHeight = 720
     @Volatile private var profileName = "USB"
     @Volatile private var useTexturePreview = true
+    @Volatile private var previewOnly = false
+    private val layoutListener = android.view.View.OnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+        if (wanted && (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop)) transform()
+    }
+    fun usePreview(view: TextureView) {
+        if (preview === view) return
+        stop()
+        preview.surfaceTextureListener = null
+        preview.removeOnLayoutChangeListener(layoutListener)
+        preview = view
+        installPreviewListener()
+    }
 
     fun configureForNetwork(wifi: Boolean) {
         maxWidth = if (wifi) 960 else 1280
@@ -151,9 +164,10 @@ class CameraController(
 
     init {
         displayManager.registerDisplayListener(displayListener, Handler(activity.mainLooper))
-        preview.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
-            if (wanted && (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop)) transform()
-        }
+        installPreviewListener()
+    }
+    private fun installPreviewListener() {
+        preview.addOnLayoutChangeListener(layoutListener)
         preview.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
             override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
                 if (wanted) open()
@@ -168,8 +182,9 @@ class CameraController(
             }
         }
     }
-    fun start() {
+    fun start(previewOnly: Boolean = false) {
         if (closed) return
+        this.previewOnly = previewOnly
         wanted = true
         if (preview.isAvailable) open()
     }
@@ -188,6 +203,7 @@ class CameraController(
                 if (activity.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
                     throw SecurityException("Permiso de cámara no concedido")
                 val chosen = selectedProfile
+                val localPreview = previewOnly
                 require(chosen == null || chosen.fps <= 30) { "Esta versión admite hasta 30 FPS" }
                 if (chosen != null) facing = chosen.facing
                 val cameraId = chosen?.cameraId ?: manager.cameraIdList.firstOrNull {
@@ -210,19 +226,19 @@ class CameraController(
                 val surface = Surface(texture)
                 previewSurface = surface
                 val targetFps = chosen?.fps ?: 30
-                val h264 = chosen?.codec == "h264"
-                useTexturePreview = h264 || useTexturePreview
-                val imageReader = ImageReader.newInstance(size.width, size.height, ImageFormat.YUV_420_888, 3)
+                val h264 = !localPreview && chosen?.codec == "h264"
+                useTexturePreview = localPreview || h264 || useTexturePreview
+                val imageReader = if (localPreview) null else ImageReader.newInstance(size.width, size.height, ImageFormat.YUV_420_888, 3)
                 reader = imageReader
-                val videoSurface = if (h264) {
+                val videoSurface = if (localPreview) surface else if (h264) {
                     encoder = com.wilkenstech.movilcamara.video.H264Encoder(chosen!!,
                         { outputRotation() to (facing == CameraCharacteristics.LENS_FACING_FRONT) },
                         { frame -> if (wanted && generation == run) onFrame(frame) },
                         { message -> fail(run, message) }).also { it.start() }
                     encoder!!.surface
-                } else imageReader.surface
+                } else checkNotNull(imageReader).surface
                 pacer = FramePacer(targetFps)
-                imageReader.setOnImageAvailableListener({ source ->
+                imageReader?.setOnImageAvailableListener({ source ->
                     val image = try { source.acquireLatestImage() } catch (_: Exception) { null }
                     image?.use {
                         if (!wanted || generation != run) return@use
@@ -248,7 +264,7 @@ class CameraController(
                         completeOpen()
                         device = camera
                         try {
-                            val outputs = if (nativePreview) listOf(surface, videoSurface) else listOf(videoSurface)
+                            val outputs = if (localPreview) listOf(surface) else if (nativePreview) listOf(surface, videoSurface) else listOf(videoSurface)
                             val callback = object : CameraCaptureSession.StateCallback() {
                                 override fun onConfigured(configured: CameraCaptureSession) {
                                     if (!wanted || generation != run) { configured.close(); return }
@@ -256,7 +272,7 @@ class CameraController(
                                     try {
                                         val request = camera.createCaptureRequest(if (h264) CameraDevice.TEMPLATE_RECORD else CameraDevice.TEMPLATE_PREVIEW).apply {
                                             if (nativePreview) addTarget(surface)
-                                            addTarget(videoSurface)
+                                            if (!localPreview) addTarget(videoSurface)
                                             set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
                                             characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
                                                 ?.filter { it.lower <= targetFps && it.upper >= targetFps }

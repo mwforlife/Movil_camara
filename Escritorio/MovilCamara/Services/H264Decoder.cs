@@ -46,7 +46,7 @@ public sealed class H264Decoder : IDisposable
         catch { Dispose(); throw; }
     }
 
-    public byte[]? Decode(byte[] bytes, long ptsUs)
+    public byte[]? Decode(byte[] bytes, long ptsUs, bool renderOutput = true)
     {
         using var apartment = new Apartment();
         var sample = Sample(bytes.Length, bytes);
@@ -56,14 +56,14 @@ public sealed class H264Decoder : IDisposable
             Check(Call<SetI64>(sample, 38)(sample, 10_000_000L / fps));
             var result = Call<Input>(decoder, 24)(decoder, 0, sample, 0);
             byte[]? latest = null;
-            if (result == NotAccepting) { latest = Drain(); result = Call<Input>(decoder, 24)(decoder, 0, sample, 0); }
+            if (result == NotAccepting) { latest = Drain(renderOutput); result = Call<Input>(decoder, 24)(decoder, 0, sample, 0); }
             Check(result);
-            return Drain() ?? latest;
+            return Drain(renderOutput) ?? latest;
         }
         finally { Release(sample); }
     }
 
-    private byte[]? Drain()
+    private byte[]? Drain(bool renderOutput)
     {
         byte[]? latest = null;
         for (var attempt = 0; attempt < 16; attempt++)
@@ -75,6 +75,8 @@ public sealed class H264Decoder : IDisposable
             Check(result);
             try
             {
+                // Preserve AVC reference decoding, but avoid RGB conversion/allocation for obsolete output.
+                if (!renderOutput) continue;
                 Check(Call<Input>(converter, 24)(converter, 0, sample, 0));
                 var converted = GetSample(converter, codedWidth * codedHeight * 4, out var rgb);
                 if (converted == NeedInput) continue;
